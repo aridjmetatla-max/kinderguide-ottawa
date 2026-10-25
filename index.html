@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KinderGuide Ottawa</title>
+<meta name="description" content="Find licensed child care in Ottawa, build your shortlist of 5 to 9 programs, and visit with the right questions.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="styles.css?v=3">
+</head>
+<body>
+
+<header class="top">
+  <button class="brand" data-go="home" aria-label="KinderGuide Ottawa home"><span class="mark" aria-hidden="true">K</span><span>KinderGuide <em>Ottawa</em></span></button>
+  <nav class="tabs" aria-label="Main">
+    <button data-go="home">Home</button>
+    <button data-go="find">Find care</button>
+    <button data-go="shortlist">My shortlist <span class="count" id="navCount">0</span></button>
+    <button data-go="checklist">Visit checklist</button>
+    <button data-go="costs">Costs</button>
+    <button data-go="tools">Official tools</button>
+    <button data-go="guide">Guide</button>
+    <button data-go="numbers">Numbers</button>
+  </nav>
+</header>
+
+<main>
+  <!-- ================= HOME ================= -->
+  <section class="view" id="view-home">
+    <div class="start card" id="startBanner">
+      <div class="start-text">
+        <b>Start here, before anything else: get on the City’s waitlist.</b>
+        <span>You must be on the City of Ottawa’s Child Care Registry and Waitlist to get a space in licensed child care. Waits are often around 2 years, so families register early, even during pregnancy. Log in at least every 60 days or your application can become inactive.</span>
+      </div>
+      <div class="start-actions">
+        <a class="btn primary" id="startRegistry" target="_blank" rel="noopener">Open the registry ↗</a>
+        <button class="btn ghost" id="startIcs">Add login reminders to my calendar</button>
+        <button class="link" id="startDone">I’m already registered</button>
+      </div>
+    </div>
+    <div class="hero">
+      <div>
+        <h1>Find licensed child care in Ottawa, one step at a time.</h1>
+        <p class="lead">Every licensed centre and home child care agency in the City’s open data, in one place, with the right questions to ask before you choose.</p>
+        <form class="finder card" id="finder">
+          <fieldset>
+            <legend>My child is</legend>
+            <div class="chips" id="ageChips"></div>
+          </fieldset>
+          <fieldset>
+            <legend>Near</legend>
+            <div class="near-row">
+              <input id="postalInput" type="text" inputmode="text" autocomplete="postal-code" placeholder="Postal code, e.g. K2K 2W9" aria-label="Postal code">
+              <button type="button" class="btn ghost" id="locateBtn">Use my location</button>
+            </div>
+            <div class="chips small" id="areaChips"></div>
+            <p class="hint" id="nearStatus"></p>
+          </fieldset>
+          <fieldset>
+            <legend>Must-haves <span class="opt">(optional)</span></legend>
+            <label class="check"><input type="checkbox" id="mFrench"> French service</label>
+            <label class="check"><input type="checkbox" id="mIndigenous"> Indigenous programming</label>
+            <label class="check"><input type="checkbox" id="mHome" checked> Include home child care agencies</label>
+          </fieldset>
+          <button class="btn primary big" type="submit">Show my options →</button>
+        </form>
+      </div>
+      <aside class="fact card" id="homeFact" aria-live="polite"></aside>
+    </div>
+
+    <div class="how">
+      <button class="how-step" data-go="find"><b>1</b><span><strong>See your real options</strong>Only programs licensed for your child’s age, near you.</span></button>
+      <button class="how-step" data-go="shortlist"><b>2</b><span><strong>Build your 5 to 9</strong>The City’s registry asks you to rank 5 to 9 programs.</span></button>
+      <button class="how-step" data-go="checklist"><b>3</b><span><strong>Visit with confidence</strong>Ontario’s official questions, with your notes.</span></button>
+    </div>
+
+    <p class="honest"><strong>Good to know:</strong> KinderGuide shows <em>licensed</em> programs and their licensed number of spaces. It does not show open spots, and it cannot shorten waitlists. It helps you understand your options and choose well. <button class="link" data-go="about">About the data</button></p>
+  </section>
+
+  <!-- ================= FIND ================= -->
+  <section class="view" id="view-find">
+    <div class="find-bar card">
+      <div class="fb-row">
+        <label class="fb"><span>Age</span><select id="fAge"></select></label>
+        <label class="fb"><span>Near</span><select id="fArea"></select></label>
+        <label class="fb"><span>Within</span><select id="fRadius"><option value="2">2 km</option><option value="5" selected>5 km</option><option value="10">10 km</option><option value="0">All Ottawa</option></select></label>
+        <label class="fb grow"><span>Name</span><input id="fQuery" type="search" placeholder="Search by name or street"></label>
+      </div>
+      <div class="fb-row toggles">
+        <label class="check"><input type="checkbox" id="fFrench"> French service</label>
+        <label class="check"><input type="checkbox" id="fIndigenous"> Indigenous programming</label>
+        <label class="check"><input type="checkbox" id="fHome"> Home child care agencies</label>
+        <span class="result-count" id="resultCount" aria-live="polite"></span>
+      </div>
+    </div>
+    <div class="find">
+      <div class="list" id="results"></div>
+      <div class="map-wrap"><div id="map" role="region" aria-label="Map of licensed child care"></div>
+        <div class="legend"><span><i class="dot centre"></i>Centre</span><span><i class="dot home"></i>Home child care agency</span><span><i class="dot saved"></i>On my shortlist</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= SHORTLIST ================= -->
+  <section class="view" id="view-shortlist">
+    <div class="page-head">
+      <h2>My shortlist</h2>
+      <p>The City’s registry asks you to choose and rank <strong>5 to 9</strong> programs. Put your favourite first.</p>
+    </div>
+    <div class="progress card" id="slProgress"></div>
+    <div id="slList"></div>
+    <div class="sl-actions card" id="slActions">
+      <button class="btn primary" id="copyList">Copy my ranked list</button>
+      <button class="btn ghost" id="printList">Print</button>
+      <a class="btn ghost" id="registryLink" target="_blank" rel="noopener">Open the City’s registry ↗</a>
+      <p class="hint">Your shortlist and notes are saved on this device only. Nothing is sent anywhere.</p>
+    </div>
+  </section>
+
+  <!-- ================= CHECKLIST ================= -->
+  <section class="view" id="view-checklist">
+    <div class="page-head">
+      <h2>Visit checklist</h2>
+      <p>The Government of Ontario’s own questions to ask a child care provider, grouped by topic. Mark each answer and add notes.</p>
+    </div>
+    <div class="card cl-top">
+      <label class="fb"><span>Checklist for</span><select id="clFor"></select></label>
+      <div class="fb"><span>Show</span><div class="seg" id="clMode"><button type="button" data-mode="top">Top 10 to ask first</button><button type="button" data-mode="all">All 34 questions</button></div></div>
+      <div id="clRatio" class="ratio"></div>
+      <button class="btn ghost" id="clPrint">Print</button>
+    </div>
+    <div id="clGroups"></div>
+    <div class="card lookfor"><h3>Also look for</h3><ul id="lookFor"></ul></div>
+    <p class="source" id="clSource"></p>
+  </section>
+
+  <!-- ================= COSTS ================= -->
+  <section class="view" id="view-costs">
+    <div class="page-head">
+      <h2>What will it cost?</h2>
+      <p>An honest estimate based on Ontario’s official fee rules. Each program sets its own exact fee, so always confirm with the program.</p>
+    </div>
+    <div class="costs">
+      <form class="card est" id="estForm">
+        <fieldset><legend>My child is</legend><div class="chips" id="estAge"></div></fieldset>
+        <fieldset><legend>Days per week</legend><div class="chips" id="estDays"></div></fieldset>
+        <fieldset><legend>Is the program in the $10-a-day (Canada-wide) system?</legend><div class="chips" id="estEnrolled"></div></fieldset>
+      </form>
+      <div class="card est-out" id="estOut" aria-live="polite"></div>
+    </div>
+    <div class="card prose" id="costFacts"></div>
+  </section>
+
+  <!-- ================= OFFICIAL TOOLS ================= -->
+  <section class="view" id="view-tools">
+    <div class="page-head">
+      <h2>Official tools, in one place</h2>
+      <p>Ottawa families use more than ten official websites from the City and the Government of Ontario. Here is what each one is for, in the order you will need them. KinderGuide never replaces them: it sends you to the right one.</p>
+    </div>
+    <div class="tools" id="toolsList"></div>
+  </section>
+
+  <!-- ================= GUIDE ================= -->
+  <section class="view" id="view-guide">
+    <div class="page-head">
+      <h2>Step-by-step guide</h2>
+      <p>From “where do I start?” to a submitted list, in six steps.</p>
+    </div>
+    <ol class="steps" id="guideSteps"></ol>
+  </section>
+
+  <!-- ================= NUMBERS ================= -->
+  <section class="view" id="view-numbers">
+    <div class="page-head">
+      <h2>Ottawa in numbers</h2>
+      <p>What the City’s open data shows about licensed child care, and what it does not.</p>
+    </div>
+    <div id="numbers"></div>
+  </section>
+
+  <!-- ================= ABOUT ================= -->
+  <section class="view" id="view-about">
+    <div class="page-head"><h2>About KinderGuide and the data</h2></div>
+    <div class="card prose" id="about"></div>
+  </section>
+</main>
+
+<!-- Bottom navigation on phones -->
+<nav class="bottom" aria-label="Main (mobile)">
+  <button data-go="home">Home</button>
+  <button data-go="find">Find</button>
+  <button data-go="shortlist">Shortlist <span class="count" id="navCount2">0</span></button>
+  <button data-go="costs">Costs</button>
+  <button data-go="tools">Tools</button>
+</nav>
+
+<footer class="foot">
+  <span>KinderGuide Ottawa · a University of Ottawa SED3111 student project · not affiliated with the City of Ottawa</span>
+  <span><button class="link" data-go="checklist">Visit checklist</button> · <button class="link" data-go="guide">Guide</button> · <button class="link" data-go="numbers">Ottawa in numbers</button> · <button class="link" data-go="about">About the data</button> · <button class="link" id="tourAgain">Take the tour</button></span>
+</footer>
+
+<!-- Centre details drawer -->
+<div class="scrim" id="scrim" hidden></div>
+<aside class="drawer" id="drawer" aria-hidden="true" aria-labelledby="dTitle" role="dialog"></aside>
+
+<!-- Tutorial -->
+<div class="tour" id="tour" hidden>
+  <div class="tour-card" role="dialog" aria-labelledby="tourTitle">
+    <svg class="kip" viewBox="0 0 120 120" aria-hidden="true">
+      <ellipse cx="60" cy="70" rx="44" ry="40" fill="#f6c453"/>
+      <circle cx="44" cy="62" r="7" fill="#2b2b2b"/><circle cx="76" cy="62" r="7" fill="#2b2b2b"/>
+      <circle cx="46" cy="60" r="2.2" fill="#fff"/><circle cx="78" cy="60" r="2.2" fill="#fff"/>
+      <path d="M48 82 Q60 92 72 82" stroke="#2b2b2b" stroke-width="4" fill="none" stroke-linecap="round"/>
+      <circle cx="36" cy="78" r="6" fill="#f08a6b" opacity=".6"/><circle cx="84" cy="78" r="6" fill="#f08a6b" opacity=".6"/>
+      <path d="M60 30 Q62 14 74 12" stroke="#2b2b2b" stroke-width="4" fill="none" stroke-linecap="round"/><circle cx="76" cy="11" r="6" fill="#e07a5f"/>
+    </svg>
+    <h3 id="tourTitle"></h3>
+    <p id="tourText"></p>
+    <div class="tour-dots" id="tourDots"></div>
+    <div class="tour-actions"><button class="btn ghost" id="tourSkip">Skip</button><button class="btn primary" id="tourNext">Next</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="data/providers.js?v=3"></script>
+<script src="content.js?v=3"></script>
+<script src="app.js?v=3"></script>
+</body>
+</html>
