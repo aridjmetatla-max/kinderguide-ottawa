@@ -10,7 +10,7 @@ A University of Ottawa SED3111 student project. KinderGuide helps Ottawa parents
 
 ## What is new in Prototype 2
 - A 4-step journey with a progress stepper instead of 8 tabs, and a "Next" button on every step
-- An "All services" hub: 11 official tools grouped by task, with search and short answers ("Ask Kip")
+- An "All services" hub: 11 official tools grouped by task, with search and short answers to common questions
 - Ottawa Public Health inspection results for 282 of 315 centres (matched by address and name; unsure matches left out)
 - Search near home or along the way to work; compare programs side by side; share a shortlist with a partner by link
 - Visit checklist (Top 10 first), a 5-task application plan with calendar reminders, and a cost estimator based on Ontario's official cap
