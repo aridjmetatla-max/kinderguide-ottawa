@@ -14,6 +14,9 @@ A University of Ottawa SED3111 student project. KinderGuide helps Ottawa parents
 - Ottawa Public Health inspection results for 282 of 315 centres (matched by address and name; unsure matches left out)
 - Search near home or along the way to work; compare programs side by side; share a shortlist with a partner by link
 - Visit checklist (Top 10 first), a 5-task application plan with calendar reminders, and a cost estimator based on Ontario's official cap
+- Your child's timeline: from the birth or due date and the date care is needed, KinderGuide searches the right age group (with a 2-year wait, a baby is usually a toddler when care starts)
+- A warning with a one-tap fix when there are fewer than 5 options, and a printable "My child care plan"
+- "Data insights for the City": infant spaces by postal area, inspection patterns and data gaps, with recommendations
 - Full French version; works on phones; no accessibility errors found by axe (WCAG 2 A/AA)
 - Google ratings and reviews are built in but switched off until the team adds a restricted API key in `config.js`
 

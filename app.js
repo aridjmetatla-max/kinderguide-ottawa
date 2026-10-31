@@ -72,7 +72,7 @@ function downloadIcs(name, events) {
   a.href = URL.createObjectURL(new Blob([lines.join('\r\n')], { type: 'text/calendar' })); a.download = name;
   document.body.appendChild(a); a.click(); a.remove();
 }
-const ext = (url, label, cls = 'btn ghost small') => `<a class="${cls}" href="${url}" target="_blank" rel="noopener">${esc(label)} ↗</a>`;
+const ext = (url, label, cls = 'btn ghost small') => `<a class="${cls}" href="${url}" target="_blank" rel="noopener">${esc(label)} ${ic('external', 'sm')}</a>`;
 
 // Ottawa Public Health inspection status of a provider
 function insp(p) {
@@ -84,8 +84,8 @@ function insp(p) {
 function inspBadge(p, short) {
   const s = insp(p);
   if (s.kind === 'na') return '';
-  if (s.kind === 'ok') return `<span class="badge ok" title="${esc(t('inspBy'))}">✓ ${esc(short ? t('inspOk') : t('inspOk') + ' · ' + dateText(s.r.last))}</span>`;
-  if (s.kind === 'bad') return `<span class="badge bad" title="${esc(t('inspBy'))}">! ${esc(short ? t('inspBad') : t('inspBad') + ' · ' + dateText(s.r.last))}</span>`;
+  if (s.kind === 'ok') return `<span class="badge ok" title="${esc(t('inspBy'))}">${ic('check', 'sm')}${esc(short ? t('inspOk') : t('inspOk') + ' · ' + dateText(s.r.last))}</span>`;
+  if (s.kind === 'bad') return `<span class="badge bad" title="${esc(t('inspBy'))}">${ic('alert', 'sm')}${esc(short ? t('inspBad') : t('inspBad') + ' · ' + dateText(s.r.last))}</span>`;
   if (s.kind === 'old') return short ? '' : `<span class="badge none">${esc(t('inspOld', s.r.last.slice(0, 4)))}</span>`;
   return short ? '' : `<span class="badge none">${esc(t('inspNone'))}</span>`;
 }
@@ -101,9 +101,9 @@ function stepDone(s) {
 }
 function renderStepper() {
   $('stepper').innerHTML = STEPS.map((s, i) => `${i ? '<span class="sep" aria-hidden="true"></span>' : ''}<button class="step${current === s ? ' on' : ''}${stepDone(s) ? ' done' : ''}" data-view="${s}" ${current === s ? 'aria-current="step"' : ''}>
-      <span class="num">${stepDone(s) && current !== s ? '✓' : i + 1}</span><span class="lbl">${esc(t('step' + (i + 1)))}</span>${s === 'shortlist' && state.shortlist.length ? `<span class="badge-n">${state.shortlist.length}</span>` : ''}</button>`).join('');
-  $('bottomNav').innerHTML = [...STEPS.map((s, i) => `<button data-view="${s}" class="${current === s ? 'on' : ''}"><span class="num">${stepDone(s) && current !== s ? '✓' : i + 1}</span>${esc(t('step' + (i + 1)))}</button>`),
-    `<button data-view="services" class="${current === 'services' ? 'on' : ''}"><span class="num">▦</span>${esc(t('svcShort'))}</button>`].join('');
+      <span class="num">${stepDone(s) && current !== s ? ic('check', 'sm') : i + 1}</span><span class="lbl">${esc(t('step' + (i + 1)))}</span>${s === 'shortlist' && state.shortlist.length ? `<span class="badge-n">${state.shortlist.length}</span>` : ''}</button>`).join('');
+  $('bottomNav').innerHTML = [...STEPS.map((s, i) => `<button data-view="${s}" class="${current === s ? 'on' : ''}"><span class="num">${stepDone(s) && current !== s ? ic('check', 'sm') : i + 1}</span>${esc(t('step' + (i + 1)))}</button>`),
+    `<button data-view="services" class="${current === 'services' ? 'on' : ''}"><span class="num">${ic('grid', 'sm')}</span>${esc(t('svcShort'))}</button>`].join('');
   $('svcBtn').classList.toggle('on', current === 'services');
 }
 function go(view, { scroll = true } = {}) {
@@ -113,12 +113,12 @@ function go(view, { scroll = true } = {}) {
   if (location.hash !== '#' + view) history.replaceState(null, '', location.pathname + location.search + '#' + view);
   if (scroll) window.scrollTo({ top: 0 });
   closePanel(); hideKip();
-  ({ home: renderHome, find: renderFind, shortlist: renderShortlist, visit: renderVisit, apply: renderApply, services: renderServices, about: renderAbout })[view]();
+  ({ home: renderHome, find: renderFind, shortlist: renderShortlist, visit: renderVisit, apply: renderApply, services: renderServices, about: renderAbout, insights: renderInsights })[view]();
   renderStepper();
   if (view === 'find') setTimeout(() => { if (map) { map.invalidateSize(); renderMap(lastList); } }, 120);
   const idx = STEPS.indexOf(view);
   ['slEyebrow', 'vEyebrow', 'aEyebrow'].forEach(id => { const n = { slEyebrow: 2, vEyebrow: 3, aEyebrow: 4 }[id]; $(id).textContent = `${state.lang === 'fr' ? 'Étape' : 'Step'} ${n} ${state.lang === 'fr' ? 'sur' : 'of'} 4`; });
-  document.title = (idx >= 0 ? `${idx + 1}. ${t('step' + (idx + 1))} · ` : view === 'services' ? t('services') + ' · ' : '') + 'KinderGuide Ottawa';
+  document.title = (idx >= 0 ? `${idx + 1}. ${t('step' + (idx + 1))} · ` : view === 'services' ? t('services') + ' · ' : view === 'insights' ? t('insTitle') + ' · ' : '') + 'KinderGuide Ottawa';
 }
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-view]');
@@ -126,7 +126,7 @@ document.addEventListener('click', e => {
 });
 window.addEventListener('hashchange', () => { const v = location.hash.slice(1); if (v && v !== current) go(v); });
 function nextBar(id, back, next, label) {
-  $(id).innerHTML = `${back ? `<button class="btn ghost" data-view="${back}">← ${esc(t('back'))}</button>` : ''}${next ? `<button class="btn primary" data-view="${next}">${esc(t('next'))}: ${esc(label)} →</button>` : ''}`;
+  $(id).innerHTML = `${back ? `<button class="btn ghost" data-view="${back}">${ic('back', 'sm')}${esc(t('back'))}</button>` : ''}${next ? `<button class="btn primary" data-view="${next}">${esc(t('next'))}: ${esc(label)}${ic('arrow', 'sm')}</button>` : ''}`;
 }
 
 /* ---------- 3. Home ---------- */
@@ -158,21 +158,54 @@ $('quick').addEventListener('submit', async e => {
   if (code) { const c = await lookupPostal(code, $('nearStatus')); if (!c) return; state.home = c; }
   save(); go('find');
 });
-const STEP_COLORS = ['var(--teal)', 'var(--coral)', 'var(--lilac)', 'var(--good)'];
+// Child's age group on the date care is needed (Ontario groups; kindergarten starts in September of the year the child turns 4)
+const ymd = d => d.toISOString().slice(0, 10);
+const addMonths = (iso, m) => { const d = new Date(iso + 'T12:00:00'); d.setMonth(d.getMonth() + m); return ymd(d); };
+function monthsBetween(a, b) { const x = new Date(a + 'T12:00:00'), y = new Date(b + 'T12:00:00'); return (y.getFullYear() - x.getFullYear()) * 12 + y.getMonth() - x.getMonth() - (y.getDate() < x.getDate() ? 1 : 0); }
+function ageGroupAt(birth, when) {
+  const by = +birth.slice(0, 4);
+  if (when >= `${by + 6}-09-01`) return 'schoolAge';
+  if (when >= `${by + 4}-09-01`) return 'kindergarten';
+  const m = monthsBetween(birth, when);
+  return m < 18 ? 'infant' : m < 30 ? 'toddler' : 'preschool';
+}
+function ageWhen(birth, when) {
+  const m = monthsBetween(birth, when);
+  if (when < birth) return t('notBorn');
+  return m < 24 ? t('ageMonths', Math.max(0, m)) : t('ageYears', Math.floor(m / 12), m % 12);
+}
+function startInfo() {
+  if (!state.birth) return null;
+  const when = state.need && state.need > ymd(new Date()) ? state.need : ymd(new Date());
+  return { when, group: ageGroupAt(state.birth, when) };
+}
+function applyDates() {
+  const si = startInfo();
+  if (si) { state.age = si.group; }
+  save();
+  const h = $('datesHint');
+  if (h) h.textContent = si ? t('datesHint', tr(AGE[si.group].label).toLowerCase(), ageWhen(state.birth, si.when), dateText(si.when)) : '';
+  renderAgeChips($('ageChips'));
+}
+['birthInput', 'needInput'].forEach(id => $(id).addEventListener('change', () => { state.birth = $('birthInput').value || null; state.need = $('needInput').value || null; applyDates(); }));
+const STEP_COLORS = ['var(--teal)', 'var(--teal)', 'var(--teal)', 'var(--teal)'];
 function renderHome() {
   renderAgeChips($('ageChips'));
   $('postalInput').placeholder = t('postal');
   if (state.home && !$('postalInput').value) $('postalInput').value = state.home.label === 'GPS' ? '' : state.home.label;
   $('nearStatus').textContent = state.home ? t('nearX', state.home.label === 'GPS' ? t('yourLoc') : state.home.label) : '';
-  $('steps4').innerHTML = STEPS.map((s, i) => `<button class="s4 glass" data-view="${s}"><span class="n" style="background:${STEP_COLORS[i]}">${i + 1}</span><b>${esc(t('step' + (i + 1)))}</b><span>${esc(t('s' + (i + 1) + 'sub'))}</span></button>`).join('');
+  $('birthInput').value = state.birth || ''; $('needInput').value = state.need || '';
+  if (state.birth) { $('datesBox').open = true; applyDates(); }
+  const icons4 = ['search', 'heart', 'clipboard', 'file'];
+  $('steps4').innerHTML = STEPS.map((s, i) => `<button class="s4 glass" data-view="${s}"><span class="n">${ic(icons4[i])}<i>${i + 1}</i></span><b>${esc(t('step' + (i + 1)))}</b><span>${esc(t('s' + (i + 1) + 'sub'))}</span></button>`).join('');
   const spaces = CENTRES.reduce((s, p) => s + p.capacity, 0);
   $('stats').innerHTML = `<div><b>${fmt(PROVIDERS.length)}</b><span>${esc(t('statPrograms'))}</span></div><div><b>${fmt(spaces)}</b><span>${esc(t('statSpaces'))}</span></div><div><b>${fmt(Object.keys(INSPECTIONS).length)}</b><span>${esc(t('statInspected'))}</span></div>`;
   $('svcRow').innerHTML = SERVICES.filter(s => s.top).map(serviceCard).join('');
 }
 function serviceCard(s) {
   const g = SERVICE_GROUPS.find(x => x.id === s.group);
-  return `<a class="svc glass" href="${SOURCES[s.src].url}" target="_blank" rel="noopener"><span class="ico" aria-hidden="true">${g.icon}</span>
-    <span><b>${esc(tr(s.name))}</b><p>${esc(tr(s.what))}</p><span class="badge ${s.who}">${esc(t('official'))} · ${esc(t(s.who))}</span></span><span class="go" aria-hidden="true">↗</span></a>`;
+  return `<a class="svc glass" href="${SOURCES[s.src].url}" target="_blank" rel="noopener"><span class="ico">${ic(g.icon)}</span>
+    <span><b>${esc(tr(s.name))}</b><p>${esc(tr(s.what))}</p><span class="badge ${s.who}">${esc(t('official'))} · ${esc(t(s.who))}</span></span><span class="go">${ic('external', 'sm')}</span></a>`;
 }
 
 /* ---------- 4. Step 1: Find ---------- */
@@ -185,8 +218,8 @@ function renderFindControls() {
   const lbl = c => c ? (c.label === 'GPS' ? t('yourLoc') : c.label) : '';
   $('locBox').innerHTML = `
     <select id="fArea" aria-label="${esc(t('near'))}"><option value="">${esc(t('anyArea'))}</option>${state.home && !AREAS.some(a => a.name === state.home.label) ? `<option value="home" selected>${esc(t('nearX', lbl(state.home)))}</option>` : ''}${AREAS.map((a, i) => `<option value="${i}" ${state.home && state.home.label === a.name ? 'selected' : ''}>${esc(a.name)}</option>`).join('')}<option value="postal">${esc(t('postal'))}…</option></select>
-    ${editing ? `<input id="locInput" class="input" placeholder="${esc(editing === 'work' ? t('workPh') : t('postal'))}" aria-label="${esc(editing === 'work' ? t('workPh') : t('postal'))}"><button class="btn primary small" id="locOk">OK</button><button class="link" id="locCancel" aria-label="Cancel">✕</button>`
-    : state.work ? `<span class="pill on" title="${esc(t('workL'))}">💼 ${esc(lbl(state.work))} <button class="link" id="clearWork" aria-label="Remove work" style="color:#fff">✕</button></span>` : `<button class="pill" id="addWork">💼 ${esc(t('work'))}</button>`}`;
+    ${editing ? `<input id="locInput" class="input" placeholder="${esc(editing === 'work' ? t('workPh') : t('postal'))}" aria-label="${esc(editing === 'work' ? t('workPh') : t('postal'))}"><button class="btn primary small" id="locOk">OK</button><button class="link" id="locCancel" aria-label="Cancel">${ic('x', 'sm')}</button>`
+    : state.work ? `<span class="pill on" title="${esc(t('workL'))}">${ic('briefcase', 'sm')}${esc(lbl(state.work))} <button class="link" id="clearWork" aria-label="Remove work" style="color:#fff">${ic('x', 'sm')}</button></span>` : `<button class="pill" id="addWork">${ic('briefcase', 'sm')}${esc(t('work'))}</button>`}`;
   $('fRadius').innerHTML = [[2, '2 km'], [5, '5 km'], [10, '10 km'], [0, t('all')]].map(([v, l]) => `<button type="button" data-r="${v}" class="${state.radius === v ? 'on' : ''}">${esc(l)}</button>`).join('');
   $('fRadius').setAttribute('aria-label', t('within'));
   $('fQuery').placeholder = t('search'); $('fQuery').value = state.query;
@@ -194,7 +227,7 @@ function renderFindControls() {
   $('fCount').hidden = !n; $('fCount').textContent = n;
   $('filterPop').innerHTML = [['french', 'french'], ['indigenous', 'indigenous'], ['agencies', 'homeAg'], ['okOnly', 'okOnly']]
     .map(([k, l]) => `<label class="check"><input type="checkbox" data-f="${k}" ${state[k] ? 'checked' : ''}> ${esc(t(l))}</label>`).join('') +
-    (state.home && state.work ? `<label class="check"><input type="checkbox" data-f="route" ${state.route ? 'checked' : ''}> 🚗 ${esc(t('onRoute'))}</label>` : '');
+    (state.home && state.work ? `<label class="check"><input type="checkbox" data-f="route" ${state.route ? 'checked' : ''}> ${ic('route', 'sm')}${esc(t('onRoute'))}</label>` : '');
   $('legend').innerHTML = `<span><i style="background:${COLORS.centre}"></i>${state.lang === 'fr' ? 'Centre' : 'Centre'}</span><span><i style="background:${COLORS.home}"></i>${esc(t('agency'))}</span><span><i style="background:${COLORS.saved}"></i>${esc(t('saved'))}</span>`;
 }
 document.querySelector('.find-bar').addEventListener('change', async e => {
@@ -254,18 +287,31 @@ function distText(p) {
   if (routeOn()) return detour(p) < .15 ? t('onWay') : `+${kmText(detour(p))} ${t('detour')}`;
   return state.home ? kmText(km(state.home, p)) + (p.approx ? ' ~' : '') : '';
 }
-function heartBtn(id) { const on = state.shortlist.includes(id); return `<button class="heart${on ? ' on' : ''}" data-save="${id}" aria-pressed="${on}">${on ? '♥' : '♡'} ${esc(on ? t('saved') : t('save'))}</button>`; }
+function heartBtn(id) { const on = state.shortlist.includes(id); return `<button class="heart${on ? ' on' : ''}" data-save="${id}" aria-pressed="${on}">${ic('heart', 'sm')}${esc(on ? t('saved') : t('save'))}</button>`; }
 function renderFind() { renderFindControls(); renderList(); nextBar('nextFind', null, 'shortlist', `${t('step2')} (${state.shortlist.length})`); }
 let lastList = [];
 function renderList() {
   const list = lastList = sortedList();
   $('resultCount').textContent = t('results', list.length);
+  renderTip(list);
   $('results').innerHTML = list.length ? list.slice(0, 160).map(p => `<article class="pc glass${p.id === activeId ? ' active' : ''}" data-id="${p.id}" tabindex="0" aria-label="${esc(p.name)}">
       <div class="pc-top"><div><h3>${esc(p.name)}</h3><div class="where">${esc(p.address)}${distText(p) ? ' · <b>' + esc(distText(p)) + '</b>' : ''}</div></div>${heartBtn(p.id)}</div>
       <div class="tags">${ageTags(p)}${extraTags(p)}${inspBadge(p, true)}</div></article>`).join('') + (list.length > 160 ? `<p class="empty">+${list.length - 160}…</p>` : '')
     : `<div class="empty glass">${esc(t('noResults'))}</div>`;
   renderMap(list);
 }
+function countAt(r) { const keep = state.radius; state.radius = r; const n = PROVIDERS.filter(matches).length; state.radius = keep; return n; }
+function renderTip(list) {
+  let html = '';
+  const si = startInfo();
+  if (si && state.age === si.group) html += `<div class="tip info">${ic('calendar', 'sm')}<span>${esc(t('ageAtStart', tr(AGE[si.group].label).toLowerCase(), dateText(si.when)))}</span></div>`;
+  if (state.home && !routeOn() && state.radius > 0 && list.length < MIN_PICKS) {
+    const next = [5, 10, 0].find(r => (r === 0 || r > state.radius) && countAt(r) >= MIN_PICKS);
+    html += `<div class="tip warn">${ic('info', 'sm')}<span>${esc(t('tipFew', list.length, '', state.radius))}</span>${next !== undefined ? `<button class="btn small primary" data-r="${next}">${esc(next ? t('tipWiden', next, countAt(next)) : t('tipAll', countAt(0)))}</button>` : ''}</div>`;
+  }
+  $('tipBox').innerHTML = html;
+}
+$('tipBox').addEventListener('click', e => { const r = e.target.closest('[data-r]'); if (r) { state.radius = +r.dataset.r; save(); renderFind(); } });
 $('results').addEventListener('click', e => {
   const s = e.target.closest('[data-save]'); if (s) { e.stopPropagation(); toggleShortlist(s.dataset.save); return; }
   const c = e.target.closest('.pc'); if (c) openPanel(c.dataset.id);
@@ -282,15 +328,15 @@ function initMap() {
   markerLayer = window.L.layerGroup().addTo(map);
   PROVIDERS.forEach(p => { markers[p.id] = window.L.circleMarker([p.lat, p.lon], markerStyle(p)).bindTooltip(esc(p.name), { direction: 'top', offset: [0, -6] }).on('click', () => openPanel(p.id)); });
 }
-const pinIcon = (emoji) => window.L.divIcon({ className: '', html: `<div style="font-size:24px;filter:drop-shadow(0 2px 3px rgba(0,0,0,.3))">${emoji}</div>`, iconSize: [26, 26], iconAnchor: [13, 24] });
+const pinIcon = name => window.L.divIcon({ className: 'map-pin', html: `<span>${ic(name)}</span>`, iconSize: [34, 34], iconAnchor: [17, 34] });
 function renderMap(list) {
   initMap(); if (!map) return;
   markerLayer.clearLayers();
   list.forEach(p => { markers[p.id].setStyle(markerStyle(p)); markerLayer.addLayer(markers[p.id]); });
   [homeMarker, workMarker, radiusCircle, routeLine].forEach(x => x && x.remove());
   homeMarker = workMarker = radiusCircle = routeLine = null;
-  if (state.home) homeMarker = window.L.marker([state.home.lat, state.home.lon], { icon: pinIcon('🏠'), title: t('home') }).addTo(map);
-  if (state.work) workMarker = window.L.marker([state.work.lat, state.work.lon], { icon: pinIcon('💼'), title: t('workL') }).addTo(map);
+  if (state.home) homeMarker = window.L.marker([state.home.lat, state.home.lon], { icon: pinIcon('home'), title: t('home') }).addTo(map);
+  if (state.work) workMarker = window.L.marker([state.work.lat, state.work.lon], { icon: pinIcon('briefcase'), title: t('workL') }).addTo(map);
   if (routeOn()) {
     routeLine = window.L.polyline([[state.home.lat, state.home.lon], [state.work.lat, state.work.lon]], { color: COLORS.saved, weight: 4, dashArray: '8 8' }).addTo(map);
     map.fitBounds(routeLine.getBounds(), { padding: [40, 40] });
@@ -308,7 +354,7 @@ function openPanel(id, tab) {
   const q = encodeURIComponent(`${p.name} ${p.address} ${p.city} ON`);
   $('panel').innerHTML = `
     <div class="p-head">
-      <button class="p-close" id="pClose" aria-label="Close">✕</button>
+      <button class="p-close" id="pClose" aria-label="Close">${ic('x')}</button>
       <h2 id="pTitle">${esc(p.name)}</h2>
       <div class="p-sub">${esc(p.address)}, ${esc(p.city)} ${esc(p.postal)}${distText(p) ? ' · ' + esc(distText(p)) : ''}${p.approx ? ' · ' + esc(t('approx')) : ''}</div>
       <div class="tags" style="margin-top:8px;display:flex;gap:5px;flex-wrap:wrap">${ageTags(p)}${extraTags(p)}${inspBadge(p, true)}</div>
@@ -326,41 +372,41 @@ function costBox(p) {
   const under6 = p.kind === 'home' || ['infant', 'toddler', 'preschool', 'kindergarten'].some(k => p.spaces[k] > 0);
   const body = v ? `<p class="big-line"><b>${esc(t('confirmed'))}:</b> ${esc(v.text)} <span class="muted">(${esc(v.how)}, ${esc(v.date)})</span></p>`
     : under6 ? `<p class="big-line">${esc(t('costCap', COSTS.cap))}</p><p class="note">${esc(t('costAsk'))}</p>` : `<p class="big-line">${esc(t('costSchool'))}</p>`;
-  return `<div class="box"><h3>💲 ${esc(t('costTitle'))}</h3>${body}<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn ghost small" data-view="apply">${esc(t('estTitle'))}</button>${ext(SOURCES.subsidy.url, t('calc'))}</div></div>`;
+  return `<div class="box"><h3>${ic('dollar')}${esc(t('costTitle'))}</h3>${body}<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn ghost small" data-view="apply">${esc(t('estTitle'))}</button>${ext(SOURCES.subsidy.url, t('calc'))}</div></div>`;
 }
 function renderPanelBody(p) {
   const body = $('pBody'); if (!body) return;
   if (ptab === 'overview') {
     const max = Math.max(...AGES.map(a => p.spaces[a.key]), 1);
-    body.innerHTML = (p.kind === 'centre' ? `<div class="box"><h3>👶 ${esc(t('spacesByAge'))}</h3><div class="bars">${AGES.map(a => `<div class="bar${state.age === a.key ? ' hi' : ''}"><span>${esc(tr(a.label))}</span><span class="track"><span class="fill" style="width:${p.spaces[a.key] ? Math.max(4, p.spaces[a.key] / max * 100) : 0}%"></span></span><span class="n">${p.spaces[a.key] || '–'}</span></div>`).join('')}</div>
+    body.innerHTML = (p.kind === 'centre' ? `<div class="box"><h3>${ic('child')}${esc(t('spacesByAge'))}</h3><div class="bars">${AGES.map(a => `<div class="bar${state.age === a.key ? ' hi' : ''}"><span>${esc(tr(a.label))}</span><span class="track"><span class="fill" style="width:${p.spaces[a.key] ? Math.max(4, p.spaces[a.key] / max * 100) : 0}%"></span></span><span class="n">${p.spaces[a.key] || '–'}</span></div>`).join('')}</div>
         <p class="note"><b>${esc(t('licensedFor', p.capacity))}</b>: ${esc(t('spacesNote'))}</p></div>`
-      : `<div class="box"><h3>🏠 ${esc(t('agency'))}</h3><p>${state.lang === 'fr' ? 'Garde dans la maison d’une éducatrice, supervisée par cette agence agréée. Contactez l’agence pour connaître les maisons près de chez vous.' : 'Care in a provider’s home, overseen by this licensed agency. Contact the agency to find homes near you.'}</p></div>`)
+      : `<div class="box"><h3>${ic('home')}${esc(t('agency'))}</h3><p>${state.lang === 'fr' ? 'Garde dans la maison d’une éducatrice, supervisée par cette agence agréée. Contactez l’agence pour connaître les maisons près de chez vous.' : 'Care in a provider’s home, overseen by this licensed agency. Contact the agency to find homes near you.'}</p></div>`)
       + costBox(p) + (p.operator ? `<p class="note">${state.lang === 'fr' ? 'Exploitant' : 'Operator'}: ${esc(p.operator)}</p>` : '');
   } else if (ptab === 'safety') {
     const s = insp(p);
-    let html = `<div class="box"><h3>🛡️ ${esc(t('inspTitle'))}</h3><p class="note" style="margin:0 0 10px">${esc(t('inspBy'))}</p>`;
+    let html = `<div class="box"><h3>${ic('shield')}${esc(t('inspTitle'))}</h3><p class="note" style="margin:0 0 10px">${esc(t('inspBy'))}</p>`;
     if (!s.r) html += `<p>${esc(t('inspNone'))}.</p>`;
     else {
       html += `<p class="big-line">${inspBadge(p)}</p><p>${esc(t('inspSum', s.r.n2y, s.r.bad2y))}${s.r.rooms > 1 ? ` · ${s.r.rooms} ${state.lang === 'fr' ? 'locaux' : 'rooms'}` : ''}</p>
-        <ul class="timeline">${s.r.list.map(i => `<li><span>${esc(dateText(i.d))} · ${esc(t(i.type))}</span><span class="badge ${i.ok ? 'ok' : 'bad'}">${i.ok ? '✓ ' + esc(t('inspOk')) : '! ' + esc(t('inspBad'))}</span></li>`).join('')}</ul>`;
+        <ul class="timeline">${s.r.list.map(i => `<li><span>${esc(dateText(i.d))} · ${esc(t(i.type))}</span><span class="badge ${i.ok ? 'ok' : 'bad'}">${i.ok ? ic('check', 'sm') + esc(t('inspOk')) : ic('alert', 'sm') + esc(t('inspBad'))}</span></li>`).join('')}</ul>`;
       if (s.r.issues.length) html += `<details class="more"><summary>${esc(t('inspIssues'))} (${s.r.issues.length})</summary><ul class="issues">${s.r.issues.map(i => `<li>${esc(i.t)} <span class="muted">· ${esc(dateText(i.d))}</span> ${i.c ? `<span class="crit">${esc(t('critical'))}</span>` : ''}</li>`).join('')}</ul></details>`;
     }
     html += `<p class="note">${esc(t('source'))}: ${esc(INSPECTIONS_META.source)}, ${esc(INSPECTIONS_META.feed)}.</p></div>
-      <div class="box"><h3>📄 ${esc(t('licReport'))}</h3><div style="display:flex;gap:8px;flex-wrap:wrap">${ext(SOURCES.licensing.url, t('licReport'), 'btn primary small')}<button class="btn ghost small" id="copyName">${esc(t('copyName'))}</button></div></div>`;
+      <div class="box"><h3>${ic('file')}${esc(t('licReport'))}</h3><div style="display:flex;gap:8px;flex-wrap:wrap">${ext(SOURCES.licensing.url, t('licReport'), 'btn primary small')}<button class="btn ghost small" id="copyName">${esc(t('copyName'))}</button></div></div>`;
     body.innerHTML = html;
     $('copyName').onclick = async () => toast((await copyText(p.name)) ? t('nameCopied') : p.name);
   } else if (ptab === 'reviews') {
     const q = encodeURIComponent(`${p.name} ${p.address} ${p.city} ON`);
-    body.innerHTML = `<div class="box" id="gBox"><h3>⭐ ${esc(t('revLive'))}</h3><div id="gReviews">${CONFIG.GOOGLE_PLACES_KEY ? '…' : ''}</div>
+    body.innerHTML = `<div class="box" id="gBox"><h3>${ic('star')}${esc(t('revLive'))}</h3><div id="gReviews">${CONFIG.GOOGLE_PLACES_KEY ? '…' : ''}</div>
         ${ext(`https://www.google.com/maps/search/?api=1&query=${q}`, t('revGoogle'), 'btn primary small')}<p class="note">${esc(t('revNote'))}</p></div>
       <details class="box more"><summary>${esc(t('tipsPreview'))}</summary><div class="example" style="margin-top:8px">${state.lang === 'fr' ? 'Exemples écrits par notre équipe, pas de vrais avis.' : 'Examples written by our team, not real reviews.'}</div><ul class="qlist">${EXAMPLE_TIPS.map(x => `<li>${esc(tr(x))}</li>`).join('')}</ul></details>`;
     if (CONFIG.GOOGLE_PLACES_KEY) loadGoogle(p).then(html => { const el = $('gReviews'); if (el && activeId === p.id) el.innerHTML = html; });
   } else {
     const ages = p.kind === 'centre' ? AGES.filter(a => p.spaces[a.key] > 0) : AGES;
     const top = TOP10.slice(0, 5).map(k => tr(CHECKLIST.find(g => k.startsWith(g.id)).items[+k.replace(/\D/g, '')]));
-    body.innerHTML = `<div class="box"><h3>❓ ${esc(t('askTop'))}</h3><ol class="qlist">${top.map(x => `<li>${esc(x)}</li>`).join('')}</ol>
-        <button class="btn primary small" id="toChecklist" style="margin-top:6px">${esc(t('startChecklist'))} →</button></div>
-      <div class="box"><h3>👩‍🏫 ${esc(t('ratios'))}</h3><ul class="qlist">${ages.map(a => `<li><b>${esc(tr(a.long))}</b>: ${esc(tr(a.ratio))}</li>`).join('')}</ul><p class="note">${esc(t('source'))}: ${ext(SOURCES.ratios.url, 'Ontario', 'link')}</p></div>`;
+    body.innerHTML = `<div class="box"><h3>${ic('question')}${esc(t('askTop'))}</h3><ol class="qlist">${top.map(x => `<li>${esc(x)}</li>`).join('')}</ol>
+        <button class="btn primary small" id="toChecklist" style="margin-top:6px">${esc(t('startChecklist'))}${ic('arrow', 'sm')}</button></div>
+      <div class="box"><h3>${ic('school')}${esc(t('ratios'))}</h3><ul class="qlist">${ages.map(a => `<li><b>${esc(tr(a.long))}</b>: ${esc(tr(a.ratio))}</li>`).join('')}</ul><p class="note">${esc(t('source'))}: ${ext(SOURCES.ratios.url, 'Ontario', 'link')}</p></div>`;
     $('toChecklist').onclick = () => { if (!state.shortlist.includes(p.id)) toggleShortlist(p.id, true); state.clFor = p.id; save(); go('visit'); };
   }
 }
@@ -427,9 +473,9 @@ let sharedOpen = sharedIds.length > 0;
 function renderShortlist() {
   const n = state.shortlist.length;
   $('slMode').innerHTML = [['list', t('list')], ['compare', t('compare')]].map(([k, l]) => `<button data-m="${k}" class="${state.slMode === k ? 'on' : ''}">${esc(l)}</button>`).join('');
-  $('sharedBanner').innerHTML = sharedOpen ? `<div class="shared"><span>🔗 ${esc(t('sharedBanner', sharedIds.length))} ${sharedIds.map(id => esc(BY_ID[id].name)).join(' · ')}</span><span style="display:flex;gap:8px"><button class="btn primary small" id="addShared">${esc(t('addShared'))}</button><button class="btn ghost small" id="dismissShared">${esc(t('dismiss'))}</button></span></div>` : '';
+  $('sharedBanner').innerHTML = sharedOpen ? `<div class="shared"><span>${ic('link', 'sm')} ${esc(t('sharedBanner', sharedIds.length))} ${sharedIds.map(id => esc(BY_ID[id].name)).join(' · ')}</span><span style="display:flex;gap:8px"><button class="btn primary small" id="addShared">${esc(t('addShared'))}</button><button class="btn ghost small" id="dismissShared">${esc(t('dismiss'))}</button></span></div>` : '';
   $('slProgress').innerHTML = `<div class="slot-row" aria-hidden="true">${Array.from({ length: MAX_PICKS }, (_, i) => `<span class="slot${i < n ? ' full' : ''}${i === MIN_PICKS - 1 ? ' min' : ''}"></span>`).join('')}</div><b>${n} / 9</b><span class="muted">${esc(n === 0 ? '' : n < MIN_PICKS ? t('slNeed', MIN_PICKS - n) : t('slGood', MAX_PICKS - n))}</span>`;
-  if (!n) { $('slBody').innerHTML = `<div class="empty glass">${esc(t('slEmpty'))}<br><br><button class="btn primary" data-view="find">${esc(t('goFind'))} →</button></div>`; $('slActions').innerHTML = ''; nextBar('nextShortlist', 'find', null); return; }
+  if (!n) { $('slBody').innerHTML = `<div class="empty glass">${esc(t('slEmpty'))}<br><br><button class="btn primary" data-view="find">${esc(t('goFind'))}${ic('arrow', 'sm')}</button></div>`; $('slActions').innerHTML = ''; nextBar('nextShortlist', 'find', null); return; }
   if (state.slMode === 'compare') renderCompare();
   else $('slBody').innerHTML = `<div class="sl" id="slList">${state.shortlist.map((id, i) => {
     const p = BY_ID[id], s = score(id), open = !!state.notes[id];
@@ -440,10 +486,10 @@ function renderShortlist() {
           ${s.g + s.u + s.c ? `<span class="muted" style="font-size:13.5px">${esc(t('score', s.g, s.u, s.c))}</span>` : ''}
           <button class="link" data-open="${id}">${esc(t('details'))}</button><button class="link" data-cl="${id}">${esc(t('step3'))}</button></div>
         <textarea data-note="${id}" rows="${open ? 2 : 1}" placeholder="${esc(t('notes'))}…">${esc(state.notes[id] || '')}</textarea></div>
-      <div class="mini"><button data-move="-1" aria-label="${esc(t('up'))}">↑</button><button data-move="1" aria-label="${esc(t('down'))}">↓</button><button data-remove="${id}" aria-label="${esc(t('remove'))}">✕</button></div>
+      <div class="mini"><button data-move="-1" aria-label="${esc(t('up'))}">${ic('up', 'sm')}</button><button data-move="1" aria-label="${esc(t('down'))}">${ic('down', 'sm')}</button><button data-remove="${id}" aria-label="${esc(t('remove'))}">${ic('x', 'sm')}</button></div>
     </article>`;
   }).join('')}</div>`;
-  $('slActions').innerHTML = `<button class="btn primary" id="shareBtn">🔗 ${esc(t('share'))}</button><button class="btn ghost" id="copyReg">📋 ${esc(t('copyReg'))}</button>${ext(SOURCES.registry.url, t('openReg'), 'btn ghost')}<button class="btn ghost" id="printBtn">🖨 ${esc(t('print'))}</button>`;
+  $('slActions').innerHTML = `<button class="btn primary" id="shareBtn">${ic('link', 'sm')}${esc(t('share'))}</button><button class="btn ghost" id="copyReg">${ic('clipboard', 'sm')}${esc(t('copyReg'))}</button>${ext(SOURCES.registry.url, t('openReg'), 'btn ghost')}<button class="btn ghost" id="printBtn">${ic('printer', 'sm')}${esc(t('print'))}</button>`;
   nextBar('nextShortlist', 'find', 'visit', t('step3'));
 }
 function renderCompare() {
@@ -454,10 +500,10 @@ function renderCompare() {
     ${dists ? row(t('cmpDistance'), dists.map(d => `<td class="${d === best ? 'best' : ''}">${esc(kmText(d))}</td>`)) : ''}
     ${row(t('cmpAges'), ps.map(p => `<td>${p.kind === 'home' ? esc(t('agency')) : AGES.filter(a => p.spaces[a.key] > 0).map(a => esc(tr(a.label))).join(', ')}</td>`))}
     ${row(t('cmpCap'), ps.map(p => `<td>${p.kind === 'centre' ? fmt(p.capacity) : '–'}</td>`))}
-    ${row(t('cmpFrench'), ps.map(p => `<td>${p.french ? '✓' : '–'}</td>`))}
+    ${row(t('cmpFrench'), ps.map(p => `<td>${p.french ? ic('check', 'sm ok') : '–'}</td>`))}
     ${row(t('cmpInsp'), ps.map(p => `<td class="${insp(p).kind === 'ok' ? 'best' : ''}">${inspBadge(p) || '–'}</td>`))}
-    ${row(t('cmpVisit'), ids.map(id => { const s = score(id); return `<td>${s.g + s.u + s.c ? `✓ ${s.g} · ? ${s.u} · ! ${s.c}` : '–'}</td>`; }))}
-    ${row(t('cmpVisited'), ids.map(id => `<td>${state.visited[id] ? '✓' : '–'}</td>`))}
+    ${row(t('cmpVisit'), ids.map(id => { const s = score(id); return `<td>${s.g + s.u + s.c ? esc(t('score', s.g, s.u, s.c)) : '–'}</td>`; }))}
+    ${row(t('cmpVisited'), ids.map(id => `<td>${state.visited[id] ? ic('check', 'sm ok') : '–'}</td>`))}
     ${row(t('notes'), ids.map(id => `<td>${esc(state.notes[id] || '')}</td>`))}
   </tbody></table></div>`;
 }
@@ -498,7 +544,7 @@ function renderVisit() {
     const shown = g.items.map((q, i) => [q, i]).filter(([, i]) => !top || TOP10.includes(g.id + i));
     if (!shown.length) return '';
     return `<details class="group glass" open><summary>${esc(tr(g.title))}<span class="gcount">${shown.filter(([, i]) => ans[g.id + i]).length} / ${shown.length}</span></summary>
-      ${shown.map(([q, i]) => { const k = g.id + i; return `<div class="q" data-k="${k}"><span class="qt">${TOP10.includes(k) && !top ? '<span class="star" aria-hidden="true">★</span>' : ''}${esc(tr(q))}</span>
+      ${shown.map(([q, i]) => { const k = g.id + i; return `<div class="q" data-k="${k}"><span class="qt">${TOP10.includes(k) && !top ? ic('star', 'sm star') : ''}${esc(tr(q))}</span>
         <span class="ans">${['good', 'unsure', 'concern'].map(v => `<button type="button" data-v="${v}" class="${ans[k] === v ? 'on' : ''}" aria-pressed="${ans[k] === v}">${esc(t(v))}</button>`).join('')}</span>
         <input type="text" placeholder="${esc(t('note'))}…" value="${esc(notes[k] || '')}" aria-label="${esc(t('note'))}"></div>`; }).join('')}</details>`;
   }).join('');
@@ -509,7 +555,7 @@ function renderVisit() {
   const ages = p && p.kind === 'centre' ? AGES.filter(a => p.spaces[a.key] > 0) : AGES;
   $('clRatio').innerHTML = `<h3>${esc(t('ratios'))}</h3><ul class="ticks">${ages.map(a => `<li><b>${esc(tr(a.label))}</b>: ${esc(tr(a.ratio))}</li>`).join('')}</ul>`;
   $('lookFor').innerHTML = LOOK_FOR.map(x => `<li>${esc(tr(x))}</li>`).join('');
-  $('visitCal').innerHTML = p ? `<h3>📅 ${esc(t('addVisit'))}</h3><input type="date" class="input" id="visitDate" aria-label="${esc(t('visitDate'))}" style="width:100%;margin-bottom:8px"><button class="btn ghost small" id="visitIcs">${esc(t('addVisit'))}</button>` : `<p class="note" style="margin:0">${esc(t('source'))}: ${ext(SOURCES.questions.url, 'Ontario', 'link')}</p>`;
+  $('visitCal').innerHTML = p ? `<h3>${ic('calendar')}${esc(t('addVisit'))}</h3><input type="date" class="input" id="visitDate" aria-label="${esc(t('visitDate'))}" style="width:100%;margin-bottom:8px"><button class="btn ghost small" id="visitIcs">${esc(t('addVisit'))}</button>` : `<p class="note" style="margin:0">${esc(t('source'))}: ${ext(SOURCES.questions.url, 'Ontario', 'link')}</p>`;
   nextBar('nextVisit', 'shortlist', 'apply', t('step4'));
 }
 $('view-visit').addEventListener('click', e => {
@@ -539,22 +585,50 @@ function renderApply() {
   const list = state.shortlist.map((id, i) => `${i + 1}. ${BY_ID[id].name}`).join('\n');
   const tasks = [
     { n: 1, h: t('task1'), d: t('task1d'), act: ext(SOURCES.registry.url, t('openReg'), 'btn primary small') },
-    { n: 2, h: t('task2'), d: t('task2d'), act: state.shortlist.length ? `<button class="btn ghost small" id="copyReg2">📋 ${esc(t('copyReg'))}</button>` : `<button class="btn ghost small" data-view="find">${esc(t('goFind'))}</button>`, extra: list ? `<pre>${esc(list)}</pre>` : '' },
-    { n: 3, h: t('task3'), d: t('task3d'), act: `<button class="btn ghost small" id="icsBtn">📅 ${esc(t('reminders'))}</button>` },
+    { n: 2, h: t('task2'), d: t('task2d'), act: state.shortlist.length ? `<button class="btn ghost small" id="copyReg2">${ic('clipboard', 'sm')}${esc(t('copyReg'))}</button>` : `<button class="btn ghost small" data-view="find">${esc(t('goFind'))}</button>`, extra: list ? `<pre>${esc(list)}</pre>` : '' },
+    { n: 3, h: t('task3'), d: t('task3d'), act: `<button class="btn ghost small" id="icsBtn">${ic('bell', 'sm')}${esc(t('reminders'))}</button>` },
     { n: 4, h: t('task4'), d: t('task4d'), act: ext(SOURCES.subsidy.url, t('calc')) },
     { n: 5, h: t('task5'), d: t('task5d'), act: ext(SOURCES.earlyon.url, t('findEarlyon')) },
   ];
   const done = tasks.filter(x => state.tasks[x.n]).length;
-  $('tasks').innerHTML = tasks.map(x => `<li class="task glass${state.tasks[x.n] ? ' is-done' : ''}"><span class="tn">${state.tasks[x.n] ? '✓' : x.n}</span><div><h3>${esc(x.h)}</h3><p>${esc(x.d)}</p>${x.extra || ''}
-    <div class="row">${x.act}<button class="btn small ${state.tasks[x.n] ? 'done' : 'ghost'}" data-task="${x.n}" aria-pressed="${!!state.tasks[x.n]}">${state.tasks[x.n] ? '✓ ' + esc(t('done')) : esc(t('markDone'))}</button></div></div></li>`).join('');
+  $('tasks').innerHTML = tasks.map(x => `<li class="task glass${state.tasks[x.n] ? ' is-done' : ''}"><span class="tn">${state.tasks[x.n] ? ic('check') : x.n}</span><div><h3>${esc(x.h)}</h3><p>${esc(x.d)}</p>${x.extra || ''}
+    <div class="row">${x.act}<button class="btn small ${state.tasks[x.n] ? 'done' : 'ghost'}" data-task="${x.n}" aria-pressed="${!!state.tasks[x.n]}">${state.tasks[x.n] ? ic('check', 'sm') + esc(t('done')) : esc(t('markDone'))}</button></div></div></li>`).join('');
   const C = 2 * Math.PI * 26, frac = done / tasks.length;
   $('planRing').innerHTML = `<svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="26" fill="none" stroke="rgba(15,107,107,.15)" stroke-width="7"/><circle cx="32" cy="32" r="26" fill="none" stroke="var(--good)" stroke-width="7" stroke-linecap="round" stroke-dasharray="${C * frac} ${C}" transform="rotate(-90 32 32)"/></svg><span>${esc(t('planProgress', done, tasks.length))}</span>`;
-  renderEstimator();
+  renderEstimator(); renderTimeline();
 }
+function renderTimeline() {
+  if (!state.birth) { $('timeline').innerHTML = `<h3>${ic('calendar')}${esc(t('tlTitle'))}</h3><p class="muted">${esc(t('tlEmpty'))}</p><button class="btn ghost small" data-view="home">${esc(t('tlEdit'))}</button>`; return; }
+  const today = ymd(new Date()), by = +state.birth.slice(0, 4);
+  const ev = [{ d: today, txt: t('tlRegister'), key: 'today' }];
+  if (state.birth > today) ev.push({ d: state.birth, txt: t('tlBorn') });
+  ev.push({ d: addMonths(state.birth, 18), txt: t('tl18') }, { d: addMonths(state.birth, 30), txt: t('tl30') }, { d: `${by + 4}-09-01`, txt: t('tlJK') });
+  if (state.need) ev.push({ d: state.need, txt: `${t('tlNeed')}: ${tr(AGE[ageGroupAt(state.birth, state.need)].label)}`, key: 'need' });
+  const list = ev.filter(e => e.d >= today).sort((a, b) => a.d.localeCompare(b.d));
+  $('timeline').innerHTML = `<h3>${ic('calendar')}${esc(t('tlTitle'))}</h3><ol class="tl">${list.map(e => `<li class="${e.key || ''}"><b>${esc(e.key === 'today' ? t('tlToday') : dateText(e.d))}</b><span>${esc(e.txt)}</span></li>`).join('')}</ol>
+    <button class="link" data-view="home">${esc(t('tlEdit'))}</button>`;
+}
+function printPlan() {
+  const fr = state.lang === 'fr', si = startInfo();
+  $('planPrint').innerHTML = `<h1>${esc(t('planTitle'))}</h1><p class="muted">${esc(t('planMade', dateText(ymd(new Date()))))}</p>
+    ${si ? `<p><b>${esc(t('ageAtStart', tr(AGE[si.group].label).toLowerCase(), dateText(si.when)))}</b></p>` : ''}
+    <h2>${esc(t('planChoices'))}</h2>${state.shortlist.length ? `<ol>${state.shortlist.map(id => { const p = BY_ID[id], sc = score(id), r = INSPECTIONS[id];
+      return `<li><b>${esc(p.name)}</b>, ${esc(p.address)}, ${esc(p.city)} ${esc(p.postal)}${state.home ? ' · ' + esc(kmText(km(state.home, p))) : ''}<br>
+        ${r ? `${esc(t('inspLast'))}: ${esc(dateText(r.last))} (${esc(r.ok ? t('inspOk') : t('inspBad'))}) · ` : ''}${sc.g + sc.u + sc.c ? esc(t('score', sc.g, sc.u, sc.c)) + ' · ' : ''}${state.visited[id] ? esc(t('visited')) : ''}
+        ${state.notes[id] ? `<br><i>${esc(state.notes[id])}</i>` : ''}</li>`; }).join('')}</ol>` : `<p>${esc(t('planNone'))}</p>`}
+    <h2>${esc(t('planNext'))}</h2><ol>${[1, 2, 3, 4, 5].map(n => `<li>${state.tasks[n] ? '[x] ' : '[ ] '}${esc(t('task' + n))}: ${esc(t('task' + n + 'd'))}</li>`).join('')}</ol>
+    ${state.birth ? `<h2>${esc(t('tlTitle'))}</h2>${$('timeline').querySelector('ol') ? $('timeline').querySelector('ol').outerHTML : ''}` : ''}
+    <h2>${esc(t('planLinks'))}</h2><ul>${['registry', 'subsidy', 'cwelcc', 'licensing', 'earlyon'].map(k => `<li>${esc(SOURCES[k].label)}: ${esc(SOURCES[k].url)}</li>`).join('')}</ul>
+    <p class="muted">${fr ? 'KinderGuide Ottawa est un projet étudiant, non affilié à la Ville d’Ottawa.' : 'KinderGuide Ottawa is a student project, not affiliated with the City of Ottawa.'} ${esc(location.origin + location.pathname)}</p>`;
+  document.body.classList.add('print-plan');
+  window.print();
+}
+window.addEventListener('afterprint', () => document.body.classList.remove('print-plan'));
+$('printPlan').addEventListener('click', () => { renderTimeline(); printPlan(); });
 function renderEstimator() {
   const ages = [['infant', tr(AGE.infant.label)], ['toddler', tr(AGE.toddler.label)], ['preschool', tr(AGE.preschool.label)], ['kindergarten', tr(AGE.kindergarten.label)], ['school6', state.lang === 'fr' ? '6 ans et plus' : '6 and over']];
   const school = state.estAge === 'school6', d = state.estDays;
-  $('estimator').innerHTML = `<h3>💲 ${esc(t('estTitle'))}</h3>
+  $('estimator').innerHTML = `<h3>${ic('dollar')}${esc(t('estTitle'))}</h3>
     <span class="flabel">${esc(t('estAge'))}</span><div class="chips" data-est="estAge" style="margin:6px 0 12px">${ages.map(([k, l]) => `<button class="chip${state.estAge === k ? ' on' : ''}" data-v="${k}">${esc(l)}</button>`).join('')}</div>
     <span class="flabel">${esc(t('estDays'))}</span><div class="seg" data-est="estDays" style="margin:6px 0 12px">${[1, 2, 3, 4, 5].map(n => `<button data-v="${n}" class="${d === n ? 'on' : ''}">${n}</button>`).join('')}</div>
     ${school ? `<div class="est-out">${esc(t('estSchool'))}</div>` : `<div class="est-out">${esc(t('estOut', fmt(monthly(COSTS.cap, d))))}</div><p class="muted">${esc(t('estAvg', fmt(monthly(COSTS.average, d))))}</p>`}
@@ -612,17 +686,71 @@ function renderAbout() {
       <li>${fr ? 'Votre liste et vos notes restent sur cet appareil.' : 'Your shortlist and notes stay on this device.'}</li>
       <li>${fr ? 'Un code postal est envoyé à OpenStreetMap seulement pour le placer sur la carte. Votre position n’est jamais envoyée.' : 'A postal code is sent to OpenStreetMap only to place it on the map. Your location is never sent.'}</li>
       <li>${fr ? 'Les noms des titulaires de permis qui sont des particuliers ne sont pas affichés.' : 'Licensees who are private persons are not named.'}</li></ul></div>
-    <div class="glass card-pad"><h3>🏛️ ${esc(t('forCity'))}</h3><ul>
+    <div class="glass card-pad"><h3>${ic('landmark')}${esc(t('forCity'))}</h3><ul>
       <li>${fr ? 'Ajouter « inscrit au système à 10 $ » et « tarif de base par âge » aux données ouvertes.' : 'Add “enrolled in the $10-a-day system” and “base fee by age” to the open data.'}</li>
       <li>${fr ? 'Ajouter un identifiant commun entre les permis et les inspections de Santé publique.' : 'Add one shared ID between licences and Public Health inspections, so no matching is needed.'}</li>
       <li>${fr ? 'Publier la date des données et une mise à jour régulière.' : 'Publish the data date and a regular update schedule.'}</li></ul></div>
     <p class="trust wide">${esc(t('trust'))} ${fr ? 'Contient des renseignements visés par la Licence du gouvernement ouvert – Ville d’Ottawa.' : 'Contains information licensed under the Open Government Licence – City of Ottawa.'}</p></div>`;
 }
 
+/* ---------- 10b. Data insights for the City ---------- */
+function renderInsights() {
+  const fr = state.lang === 'fr';
+  const fsa = {};
+  CENTRES.forEach(p => { const k = (p.postal || '').slice(0, 3).toUpperCase(); if (!/^K\d[A-Z]$/.test(k)) return; const f = fsa[k] = fsa[k] || { k, centres: 0, spaces: 0, infant: 0, infantCentres: 0 }; f.centres++; f.spaces += p.capacity; f.infant += p.spaces.infant; if (p.spaces.infant) f.infantCentres++; });
+  const areas = Object.values(fsa).sort((a, b) => b.spaces - a.spaces);
+  const noInfant = areas.filter(a => a.infant === 0);
+  // Spotlight: the largest postal area with no infant spaces, and the distance to the nearest centre that has some
+  const big = noInfant.sort((a, b) => b.spaces - a.spaces)[0];
+  let spot = null;
+  if (big) {
+    const pts = CENTRES.filter(p => (p.postal || '').toUpperCase().startsWith(big.k));
+    const c = { lat: pts.reduce((s, p) => s + p.lat, 0) / pts.length, lon: pts.reduce((s, p) => s + p.lon, 0) / pts.length };
+    const nearest = Math.min(...CENTRES.filter(p => p.spaces.infant > 0).map(p => km(c, p)));
+    const area = AREAS.slice().sort((a, b) => km(c, a) - km(c, b))[0];
+    spot = { ...big, nearest, name: area.name };
+  }
+  const maxSp = Math.max(...areas.map(a => a.spaces));
+  const ins = Object.entries(INSPECTIONS).map(([id, r]) => ({ id, ...r }));
+  const recent = ins.filter(r => insp(BY_ID[r.id]).kind !== 'old');
+  const ok = recent.filter(r => r.ok).length;
+  const issues = {}; ins.forEach(r => r.issues.forEach(i => { const k = i.t.replace(/\.$/, ''); issues[k] = (issues[k] || 0) + 1; }));
+  const topIssues = Object.entries(issues).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  const maxIss = topIssues.length ? topIssues[0][1] : 1;
+  const unmatched = CENTRES.filter(p => !INSPECTIONS[p.id]).length;
+  const totalInfant = CENTRES.reduce((s, p) => s + p.spaces.infant, 0), total = CENTRES.reduce((s, p) => s + p.capacity, 0);
+  const bar = (label, n, max, note, hi) => `<div class="bar wide${hi ? ' hi' : ''}"><span>${esc(label)}</span><span class="track"><span class="fill" style="width:${Math.max(2, n / max * 100)}%"></span></span><span class="n">${esc(note)}</span></div>`;
+  $('insights').innerHTML = `
+    <div class="kpis">
+      <div class="kpi glass">${ic('child')}<b>${(totalInfant / total * 100).toFixed(1)}%</b><span>${fr ? 'des places agréées sont pour les poupons' : 'of licensed spaces are for babies'} (${fmt(totalInfant)} / ${fmt(total)})</span></div>
+      <div class="kpi glass">${ic('pin')}<b>${noInfant.length} / ${areas.length}</b><span>${fr ? 'zones postales avec des centres mais aucune place pour poupons' : 'postal areas with centres but no infant spaces'}</span></div>
+      <div class="kpi glass">${ic('shield')}<b>${Math.round(ok / Math.max(1, recent.length) * 100)}%</b><span>${fr ? 'des centres inspectés étaient conformes à la dernière inspection' : 'of inspected centres were in compliance at their last inspection'} (${ok} / ${recent.length})</span></div>
+      <div class="kpi glass">${ic('link')}<b>${unmatched}</b><span>${fr ? 'centres sans lien fiable avec les inspections (pas d’identifiant commun)' : 'centres with no reliable link to inspections (no shared ID)'}</span></div>
+    </div>
+    ${spot ? `<section class="spotlight glass card-pad"><h2>${ic('alert')}${fr ? 'À souligner' : 'Spotlight'}: ${esc(spot.name)} (${esc(spot.k)})</h2>
+      <p>${fr ? `${spot.centres} centres agréés et ${fmt(spot.spaces)} places agréées, mais <b>aucune place pour poupons</b> dans les données de la Ville. Le centre agréé le plus proche qui accueille des poupons est à <b>${kmText(spot.nearest)}</b> du centre du secteur.` : `${spot.centres} licensed centres and ${fmt(spot.spaces)} licensed spaces, but <b>no infant spaces</b> in the City’s data. The nearest licensed centre with infant spaces is <b>${kmText(spot.nearest)}</b> from the centre of the area.`}</p>
+      <p class="note">${fr ? 'À confirmer avec les données mises à jour de la Ville. Les agences de garde en milieu familial peuvent accueillir des poupons, mais leurs places ne sont pas publiées par âge.' : 'To be confirmed with the City’s updated data. Home child care agencies may care for babies, but their spaces are not published by age.'}</p></section>` : ''}
+    <div class="ins-grid">
+      <section class="glass card-pad"><h2>${ic('pin')}${fr ? 'Places par zone postale' : 'Spaces by postal area'}</h2>
+        <p class="muted">${fr ? 'Les 3 premiers caractères du code postal (RTA). En orange : aucune place pour poupons.' : 'First 3 characters of the postal code (FSA). Orange: no infant spaces.'}</p>
+        <div class="bars">${areas.slice(0, 14).map(a => bar(a.k, a.spaces, maxSp, `${fmt(a.spaces)} · ${a.infant ? fmt(a.infant) + (fr ? ' poupons' : ' infant') : (fr ? '0 poupon' : '0 infant')}`, !a.infant)).join('')}</div>
+        <p class="note">${fr ? 'Zones sans place pour poupons' : 'Areas with no infant spaces'}: ${noInfant.map(a => esc(a.k)).join(', ') || '–'}</p></section>
+      <section class="glass card-pad"><h2>${ic('shield')}${fr ? 'Problèmes d’inspection les plus fréquents' : 'Most common inspection issues'}</h2>
+        <p class="muted">${fr ? 'Santé publique Ottawa, 2 dernières années, nombre de centres.' : 'Ottawa Public Health, last 2 years, number of centres.'}</p>
+        <div class="bars">${topIssues.map(([k, n]) => bar(k, n, maxIss, String(n))).join('')}</div></section>
+    </div>
+    <div class="oim glass card-pad">
+      <div><b>${fr ? 'Observation' : 'Observation'}</b>${fr ? `${noInfant.length} zones postales ont des centres mais aucune place pour poupons, et les poupons n’ont que ${(totalInfant / total * 100).toFixed(1)} % des places.` : `${noInfant.length} postal areas have centres but no infant spaces, and babies have only ${(totalInfant / total * 100).toFixed(1)}% of all spaces.`}</div>
+      <div><b>${fr ? 'Interprétation' : 'Interpretation'}</b>${fr ? 'Les familles de poupons de ces zones doivent probablement chercher plus loin. Il faudrait comparer avec le nombre de jeunes enfants par zone (recensement) avant de conclure.' : 'Families with babies in these areas probably have to search further away. This should be compared with the number of young children per area (census) before drawing conclusions.'}</div>
+      <div><b>${fr ? 'Recommandation' : 'Recommendation'}</b>${fr ? 'Publier les places par âge avec la date des données, un identifiant commun avec les inspections, et l’adhésion au système à 10 $ et les tarifs.' : 'Publish spaces by age with the data date, one ID shared with inspections, and $10-a-day enrolment and base fees.'}</div>
+    </div>
+    <p class="trust">${fr ? 'Sources : Données ouvertes d’Ottawa (services de garde agréés) et Santé publique Ottawa (inspections, flux du 21 octobre 2026). Places agréées ≠ places libres.' : 'Sources: City of Ottawa Open Data (licensed child care) and Ottawa Public Health (inspections, Oct 21, 2026 feed). Licensed spaces are not open spots.'}</p>`;
+}
+
 /* ---------- 11. Kip helper and tour ---------- */
 function showKip() {
-  const k = { home: 'kipHome', find: 'kipFind', shortlist: 'kipShortlist', visit: 'kipVisit', apply: 'kipApply', services: 'kipServices', about: 'kipHome' }[current];
-  $('kipBubble').innerHTML = `<b>Kip</b>${esc(t(k))}<div style="margin-top:10px;display:flex;gap:8px"><button class="btn ghost small" data-view="services">${esc(t('faqTitle'))}</button><button class="btn ghost small" id="kipTour">${esc(t('footerTour'))}</button></div>`;
+  const k = { home: 'kipHome', find: 'kipFind', shortlist: 'kipShortlist', visit: 'kipVisit', apply: 'kipApply', services: 'kipServices', about: 'kipHome', insights: 'kipHome' }[current];
+  $('kipBubble').innerHTML = `<b>${ic('help', 'sm')}${esc(t('help'))}</b>${esc(t(k))}<div style="margin-top:10px;display:flex;gap:8px"><button class="btn ghost small" data-view="services">${esc(t('faqTitle'))}</button><button class="btn ghost small" id="kipTour">${esc(t('footerTour'))}</button></div>`;
   $('kipBubble').hidden = false; $('kipFab').setAttribute('aria-expanded', 'true');
 }
 function hideKip() { $('kipBubble').hidden = true; $('kipFab').setAttribute('aria-expanded', 'false'); }
@@ -647,10 +775,12 @@ $('tourSkip').addEventListener('click', endTour);
 $('tourAgain').addEventListener('click', () => showTour(0));
 
 /* ---------- 12. Start-up and language ---------- */
+function fillIcons(root = document) { root.querySelectorAll('[data-ic]').forEach(el => { el.innerHTML = ic(el.dataset.ic); el.removeAttribute('data-ic'); }); }
+fillIcons();
 function applyLang() {
   document.documentElement.lang = state.lang;
   document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
-  $('langBtn').textContent = t('lang'); $('langBtn').lang = state.lang === 'fr' ? 'en' : 'fr';
+  $('langLbl').textContent = t('lang'); $('langBtn').lang = state.lang === 'fr' ? 'en' : 'fr';
 }
 $('langBtn').addEventListener('click', () => { state.lang = state.lang === 'fr' ? 'en' : 'fr'; save(); applyLang(); go(current, { scroll: false }); });
 applyLang();
