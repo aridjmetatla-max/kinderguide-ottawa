@@ -6,11 +6,20 @@
 <title>KinderGuide Ottawa</title>
 <meta name="description" content="Find licensed child care in Ottawa in 4 clear steps: find, shortlist, visit, apply. Every official service in one place.">
 <meta name="theme-color" content="#0b5c66">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta property="og:type" content="website">
+<meta property="og:title" content="KinderGuide Ottawa: find child care in 4 clear steps">
+<meta property="og:description" content="Every licensed program and every official City of Ottawa and Ontario service in one place, with Public Health inspection results. A University of Ottawa student project.">
+<meta property="og:image" content="https://aridjmetatla-max.github.io/kinderguide-ottawa/og.jpg">
+<meta property="og:url" content="https://aridjmetatla-max.github.io/kinderguide-ottawa/">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://tile.openstreetmap.org" crossorigin>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cellipse cx='32' cy='36' rx='26' ry='24' fill='%23f6c453'/%3E%3Ccircle cx='23' cy='32' r='4' fill='%232b2b2b'/%3E%3Ccircle cx='41' cy='32' r='4' fill='%232b2b2b'/%3E%3Cpath d='M24 44 Q32 50 40 44' stroke='%232b2b2b' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<link rel="stylesheet" href="styles.css?v=30">
+<link rel="stylesheet" href="styles.css?v=40">
 </head>
 <body>
 <a class="skip" href="#main" data-i18n="skip">Skip to content</a>
@@ -24,7 +33,8 @@
   <nav class="stepper" aria-label="Steps" id="stepper"></nav>
   <div class="top-actions">
     <button class="pill" data-view="services" id="svcBtn"><span class="ico-slot" data-ic="grid"></span><span data-i18n="services">All services</span></button>
-    <button class="pill lang" id="langBtn" lang="fr"><span class="ico-slot" data-ic="globe"></span><span id="langLbl">Français</span></button>
+    <button class="pill help-top" id="helpTop" aria-label="Help"><span class="ico-slot" data-ic="help"></span></button>
+    <button class="pill lang" id="langBtn" lang="fr"><span class="ico-slot" data-ic="globe"></span><span id="langLbl">Français</span><span class="lang-short" id="langShort">FR</span></button>
   </div>
 </header>
 
@@ -181,11 +191,11 @@
 <section id="planPrint" aria-hidden="true"></section>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script src="config.js?v=30"></script>
-<script src="icons.js?v=30"></script>
-<script src="data/providers.js?v=30"></script>
-<script src="data/inspections.js?v=30"></script>
-<script src="content.js?v=30"></script>
-<script src="app.js?v=30"></script>
+<script src="config.js?v=40"></script>
+<script src="icons.js?v=40"></script>
+<script src="data/providers.js?v=40"></script>
+<script src="data/inspections.js?v=40"></script>
+<script src="content.js?v=40"></script>
+<script src="app.js?v=40"></script>
 </body>
 </html>

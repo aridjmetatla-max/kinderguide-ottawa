@@ -1,0 +1,15 @@
+{
+  "name": "KinderGuide Ottawa",
+  "short_name": "KinderGuide",
+  "description": "Find licensed child care in Ottawa in 4 clear steps, with every official service in one place.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f6f8",
+  "theme_color": "#0b5c66",
+  "lang": "en-CA",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

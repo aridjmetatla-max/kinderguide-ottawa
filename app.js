@@ -72,6 +72,7 @@ function downloadIcs(name, events) {
   a.href = URL.createObjectURL(new Blob([lines.join('\r\n')], { type: 'text/calendar' })); a.download = name;
   document.body.appendChild(a); a.click(); a.remove();
 }
+const fold = s => String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();   // ignore accents and case
 const ext = (url, label, cls = 'btn ghost small') => `<a class="${cls}" href="${url}" target="_blank" rel="noopener">${esc(label)} ${ic('external', 'sm')}</a>`;
 
 // Ottawa Public Health inspection status of a provider
@@ -124,7 +125,7 @@ document.addEventListener('click', e => {
   const b = e.target.closest('[data-view]');
   if (b) { e.preventDefault(); go(b.dataset.view); }
 });
-window.addEventListener('hashchange', () => { const v = location.hash.slice(1); if (v && v !== current) go(v); });
+window.addEventListener('hashchange', () => { const v = location.hash.slice(1); if (v.startsWith('p/')) { if (BY_ID[v.slice(2)] && activeId !== v.slice(2)) { if (current !== 'find') go('find'); openPanel(v.slice(2)); } return; } if (v && v !== current) go(v); });
 function nextBar(id, back, next, label) {
   $(id).innerHTML = `${back ? `<button class="btn ghost" data-view="${back}">${ic('back', 'sm')}${esc(t('back'))}</button>` : ''}${next ? `<button class="btn primary" data-view="${next}">${esc(t('next'))}: ${esc(label)}${ic('arrow', 'sm')}</button>` : ''}`;
 }
@@ -154,8 +155,8 @@ $('locateBtn').addEventListener('click', () => {
 });
 $('quick').addEventListener('submit', async e => {
   e.preventDefault();
-  const code = $('postalInput').value.trim();
-  if (code) { const c = await lookupPostal(code, $('nearStatus')); if (!c) return; state.home = c; }
+  const code = $('postalInput').value.trim(), btn = e.submitter || $('quick').querySelector('[type=submit]');
+  if (code) { btn.disabled = true; btn.classList.add('busy'); const c = await lookupPostal(code, $('nearStatus')); btn.disabled = false; btn.classList.remove('busy'); if (!c) return; state.home = c; }
   save(); go('find');
 });
 // Child's age group on the date care is needed (Ontario groups; kindergarten starts in September of the year the child turns 4)
@@ -264,7 +265,7 @@ function matches(p) {
   if (state.french && !p.french) return false;
   if (state.indigenous && !p.indigenous) return false;
   if (state.okOnly && insp(p).kind !== 'ok') return false;
-  if (state.query && ![p.name, p.address, p.operator, p.city].join(' ').toLowerCase().includes(state.query.toLowerCase())) return false;
+  if (state.query && !fold([p.name, p.address, p.operator, p.city, p.postal].join(' ')).includes(fold(state.query))) return false;
   if (p.kind === 'centre' && state.age !== 'any' && !(p.spaces[state.age] > 0)) return false;
   if (routeOn()) return kmToSegment(p, state.home, state.work) <= Math.max(1.5, (state.radius || 5) / 3);
   if (state.home && state.radius > 0 && km(state.home, p) > state.radius) return false;
@@ -298,6 +299,7 @@ function renderList() {
       <div class="pc-top"><div><h3>${esc(p.name)}</h3><div class="where">${esc(p.address)}${distText(p) ? ' · <b>' + esc(distText(p)) + '</b>' : ''}</div></div>${heartBtn(p.id)}</div>
       <div class="tags">${ageTags(p)}${extraTags(p)}${inspBadge(p, true)}</div></article>`).join('') + (list.length > 160 ? `<p class="empty">+${list.length - 160}…</p>` : '')
     : `<div class="empty glass">${esc(t('noResults'))}</div>`;
+  $('results').insertAdjacentHTML('beforeend', `<p class="data-date">${ic('info', 'sm')}${esc(t('dataDate', dateText(DATA_META.downloaded), dateText(INSPECTIONS_META.feed)))} <button class="link" data-view="about">${esc(t('footerAbout'))}</button></p>`);
   renderMap(list);
 }
 function countAt(r) { const keep = state.radius; state.radius = r; const n = PROVIDERS.filter(matches).length; state.radius = keep; return n; }
@@ -351,6 +353,7 @@ let ptab = 'overview';
 function openPanel(id, tab) {
   const p = BY_ID[id]; if (!p) return;
   activeId = id; if (tab) ptab = tab;
+  history.replaceState(null, '', location.pathname + location.search + '#p/' + id);
   const q = encodeURIComponent(`${p.name} ${p.address} ${p.city} ON`);
   $('panel').innerHTML = `
     <div class="p-head">
@@ -358,7 +361,7 @@ function openPanel(id, tab) {
       <h2 id="pTitle">${esc(p.name)}</h2>
       <div class="p-sub">${esc(p.address)}, ${esc(p.city)} ${esc(p.postal)}${distText(p) ? ' · ' + esc(distText(p)) : ''}${p.approx ? ' · ' + esc(t('approx')) : ''}</div>
       <div class="tags" style="margin-top:8px;display:flex;gap:5px;flex-wrap:wrap">${ageTags(p)}${extraTags(p)}${inspBadge(p, true)}</div>
-      <div class="p-actions">${heartBtn(id)}${ext(`https://www.google.com/maps/dir/?api=1&destination=${q}`, t('directions'))}${ext(`https://www.google.com/search?q=${encodeURIComponent(p.name + ' Ottawa')}`, t('contact'))}</div>
+      <div class="p-actions">${heartBtn(id)}${ext(`https://www.google.com/maps/dir/?api=1&destination=${q}`, t('directions'))}${ext(`https://www.google.com/search?q=${encodeURIComponent(p.name + ' Ottawa')}`, t('contact'))}<button class="btn ghost small" id="copyLink">${ic('link', 'sm')}${esc(t('copyLink'))}</button></div>
       <div class="tabs" role="tablist">${[['overview', 'tOverview'], ['safety', 'tSafety'], ['reviews', 'tReviews'], ['ask', 'tAsk']].map(([k, l]) => `<button role="tab" data-ptab="${k}" aria-selected="${ptab === k}" class="${ptab === k ? 'on' : ''}">${esc(t(l))}</button>`).join('')}</div>
     </div>
     <div class="p-body" id="pBody"></div>`;
@@ -391,7 +394,7 @@ function renderPanelBody(p) {
         <ul class="timeline">${s.r.list.map(i => `<li><span>${esc(dateText(i.d))} · ${esc(t(i.type))}</span><span class="badge ${i.ok ? 'ok' : 'bad'}">${i.ok ? ic('check', 'sm') + esc(t('inspOk')) : ic('alert', 'sm') + esc(t('inspBad'))}</span></li>`).join('')}</ul>`;
       if (s.r.issues.length) html += `<details class="more"><summary>${esc(t('inspIssues'))} (${s.r.issues.length})</summary><ul class="issues">${s.r.issues.map(i => `<li>${esc(i.t)} <span class="muted">· ${esc(dateText(i.d))}</span> ${i.c ? `<span class="crit">${esc(t('critical'))}</span>` : ''}</li>`).join('')}</ul></details>`;
     }
-    html += `<p class="note">${esc(t('source'))}: ${esc(INSPECTIONS_META.source)}, ${esc(INSPECTIONS_META.feed)}.</p></div>
+    html += `<p class="note">${esc(t('source'))}: ${esc(t('ophSource'))}, ${esc(dateText(INSPECTIONS_META.feed))}.</p></div>
       <div class="box"><h3>${ic('file')}${esc(t('licReport'))}</h3><div style="display:flex;gap:8px;flex-wrap:wrap">${ext(SOURCES.licensing.url, t('licReport'), 'btn primary small')}<button class="btn ghost small" id="copyName">${esc(t('copyName'))}</button></div></div>`;
     body.innerHTML = html;
     $('copyName').onclick = async () => toast((await copyText(p.name)) ? t('nameCopied') : p.name);
@@ -412,10 +415,11 @@ function renderPanelBody(p) {
 }
 $('panel').addEventListener('click', e => {
   if (e.target.closest('#pClose')) { closePanel(); return; }
+  if (e.target.closest('#copyLink')) { copyText(location.origin + location.pathname + '#p/' + activeId).then(ok => toast(ok ? t('linkCopied') : location.href)); return; }
   const tb = e.target.closest('[data-ptab]'); if (tb) { ptab = tb.dataset.ptab; openPanel(activeId); return; }
   const s = e.target.closest('[data-save]'); if (s) { toggleShortlist(s.dataset.save); openPanel(s.dataset.save); }
 });
-function closePanel() { $('panel').classList.remove('open'); $('panel').setAttribute('aria-hidden', 'true'); $('scrim').hidden = true; }
+function closePanel() { if (location.hash.startsWith('#p/')) history.replaceState(null, '', location.pathname + location.search + '#' + current); $('panel').classList.remove('open'); $('panel').setAttribute('aria-hidden', 'true'); $('scrim').hidden = true; }
 $('scrim').addEventListener('click', closePanel);
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { closePanel(); hideKip(); } });
 
@@ -649,13 +653,13 @@ $('view-apply').addEventListener('click', async e => {
 /* ---------- 9. Services hub and Ask Kip ---------- */
 function renderServices() {
   $('svcQuery').placeholder = t('svcSearch');
-  const q = $('svcQuery').value.trim().toLowerCase();
-  const hit = s => !q || (tr(s.name) + ' ' + tr(s.what)).toLowerCase().includes(q);
+  const q = fold($('svcQuery').value.trim());
+  const hit = s => !q || fold(tr(s.name) + ' ' + tr(s.what)).includes(q);
   $('svcGroups').innerHTML = SERVICE_GROUPS.map(g => {
     const items = SERVICES.filter(s => s.group === g.id && hit(s));
-    return items.length ? `<section class="sgroup"><h2><span aria-hidden="true">${g.icon}</span>${esc(tr(g.title))}</h2><div class="sgrid">${items.map(serviceCard).join('')}</div></section>` : '';
+    return items.length ? `<section class="sgroup"><h2><span class="ico">${ic(g.icon)}</span>${esc(tr(g.title))}</h2><div class="sgrid">${items.map(serviceCard).join('')}</div></section>` : '';
   }).join('');
-  const faqs = FAQ.filter(f => !q || (tr(f.q) + ' ' + tr(f.a)).toLowerCase().includes(q));
+  const faqs = FAQ.filter(f => !q || fold(tr(f.q) + ' ' + tr(f.a)).includes(q));
   $('faqList').innerHTML = faqs.map(f => `<details class="fq glass"><summary>${esc(tr(f.q))}</summary><p>${esc(tr(f.a))}${f.src ? ` ${ext(SOURCES[f.src].url, t('source'), 'link')}` : ''}</p></details>`).join('') || `<p class="muted">–</p>`;
 }
 $('svcQuery').addEventListener('input', renderServices);
@@ -744,8 +748,23 @@ function renderInsights() {
       <div><b>${fr ? 'Interprétation' : 'Interpretation'}</b>${fr ? 'Les familles de poupons de ces zones doivent probablement chercher plus loin. Il faudrait comparer avec le nombre de jeunes enfants par zone (recensement) avant de conclure.' : 'Families with babies in these areas probably have to search further away. This should be compared with the number of young children per area (census) before drawing conclusions.'}</div>
       <div><b>${fr ? 'Recommandation' : 'Recommendation'}</b>${fr ? 'Publier les places par âge avec la date des données, un identifiant commun avec les inspections, et l’adhésion au système à 10 $ et les tarifs.' : 'Publish spaces by age with the data date, one ID shared with inspections, and $10-a-day enrolment and base fees.'}</div>
     </div>
+    <div class="glass card-pad dl"><div><h2>${ic('download')}${esc(t('dlTitle'))}</h2><p class="muted">${esc(t('dlLead'))}</p></div><button class="btn primary" id="dlCsv">${ic('download', 'sm')}${esc(t('dlBtn'))}</button></div>
     <p class="trust">${fr ? 'Sources : Données ouvertes d’Ottawa (services de garde agréés) et Santé publique Ottawa (inspections, flux du 21 octobre 2026). Places agréées ≠ places libres.' : 'Sources: City of Ottawa Open Data (licensed child care) and Ottawa Public Health (inspections, Oct 21, 2026 feed). Licensed spaces are not open spots.'}</p>`;
 }
+
+function matchedCsv() {
+  const head = ['id', 'name', 'operator', 'address', 'city', 'postal', 'postal_area', 'latitude', 'longitude', 'location_approximate', 'infant', 'toddler', 'preschool', 'kindergarten', 'school_age', 'licensed_capacity', 'french_service', 'indigenous_programming', 'oph_last_inspection', 'oph_last_result', 'oph_inspections_2y', 'oph_not_in_compliance_2y'];
+  const q = v => { const x = String(v ?? ''); return /[",\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; };
+  const rows = PROVIDERS.map(p => { const r = INSPECTIONS[p.id] || {};
+    return [p.id, p.name, p.operator, p.address, p.city, p.postal, (p.postal || '').slice(0, 3), p.lat, p.lon, p.approx ? 'yes' : 'no', ...['infant', 'toddler', 'preschool', 'kindergarten', 'schoolAge'].map(k => p.spaces ? p.spaces[k] : ''), p.capacity ?? '', p.french ? 'yes' : 'no', p.indigenous ? 'yes' : 'no', r.last || '', r.last ? (r.ok ? 'in compliance' : 'not in compliance') : '', r.n2y ?? '', r.bad2y ?? ''].map(q).join(','); });
+  return [head.join(','), ...rows].join('\r\n');
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest('#dlCsv')) return;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['\ufeff' + matchedCsv()], { type: 'text/csv;charset=utf-8' })); a.download = 'kinderguide-ottawa-licensed-child-care-matched.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+});
 
 /* ---------- 11. Kip helper and tour ---------- */
 function showKip() {
@@ -755,10 +774,11 @@ function showKip() {
 }
 function hideKip() { $('kipBubble').hidden = true; $('kipFab').setAttribute('aria-expanded', 'false'); }
 $('kipFab').addEventListener('click', () => $('kipBubble').hidden ? showKip() : hideKip());
+$('helpTop').addEventListener('click', () => $('kipBubble').hidden ? showKip() : hideKip());
 document.addEventListener('click', e => {
   if (e.target.closest('[data-kip]')) { showKip(); return; }
   if (e.target.closest('#kipTour')) { hideKip(); showTour(0); return; }
-  if (!e.target.closest('#kipBubble, #kipFab')) hideKip();
+  if (!e.target.closest('#kipBubble, #kipFab, #helpTop')) hideKip();
 });
 let tourStep = 0;
 function showTour(i) {
@@ -780,10 +800,14 @@ fillIcons();
 function applyLang() {
   document.documentElement.lang = state.lang;
   document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
-  $('langLbl').textContent = t('lang'); $('langBtn').lang = state.lang === 'fr' ? 'en' : 'fr';
+  $('langLbl').textContent = t('lang'); $('langShort').textContent = state.lang === 'fr' ? 'EN' : 'FR'; $('langBtn').lang = state.lang === 'fr' ? 'en' : 'fr';
 }
 $('langBtn').addEventListener('click', () => { state.lang = state.lang === 'fr' ? 'en' : 'fr'; save(); applyLang(); go(current, { scroll: false }); });
 applyLang();
-const startView = (location.hash || '').slice(1) || (sharedIds.length ? 'shortlist' : 'home');
+const startHash = (location.hash || '').slice(1), deepId = startHash.startsWith('p/') && BY_ID[startHash.slice(2)] ? startHash.slice(2) : null;
+const startView = deepId ? 'find' : startHash || (sharedIds.length ? 'shortlist' : 'home');
 go(startView, { scroll: false });
-if (!state.tourDone && !sharedIds.length && !params.has('notour')) setTimeout(() => showTour(0), 600);
+if (deepId) { activeId = deepId; renderList(); openPanel(deepId); }
+if (!state.tourDone && !sharedIds.length && !deepId && !params.has('notour')) setTimeout(() => showTour(0), 600);
+
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});

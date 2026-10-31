@@ -190,6 +190,10 @@ const EXAMPLE_TIPS = [
 const I18N = {
   en: {
     skip: 'Skip to content', brandSub: 'Ottawa',
+    copyLink: 'Copy link', linkCopied: 'Link copied. Anyone can open this program with it.', searching: 'Searching…',
+    dataDate: (a, b) => `Data: City of Ottawa open data (downloaded ${a}) and Ottawa Public Health (${b}).`,
+    dlTitle: 'Download the matched data', dlLead: 'All 329 providers with map coordinates, licensed spaces by age and Ottawa Public Health inspection status, as one CSV file. Contains information licensed under the Open Government Licence – City of Ottawa; locations © OpenStreetMap contributors.', dlBtn: 'Download CSV',
+    ophSource: 'Ottawa Public Health, inspections of child care premises',
     brandTag: 'Child care, step by step', footerInsights: 'Data insights for the City',
     datesQ: 'Need care later, or baby not born yet?', birthL: 'Birth or due date', needL: 'Care needed from',
     datesHint: (age, when, date) => `On ${date}, your child will be ${when}: we will show ${age} programs.`,
@@ -273,6 +277,10 @@ const I18N = {
   },
   fr: {
     skip: 'Aller au contenu', brandSub: 'Ottawa',
+    copyLink: 'Copier le lien', linkCopied: 'Lien copié. Il ouvre directement ce programme.', searching: 'Recherche…',
+    dataDate: (a, b) => `Données : données ouvertes de la Ville d’Ottawa (téléchargées le ${a}) et Santé publique Ottawa (${b}).`,
+    dlTitle: 'Télécharger les données jumelées', dlLead: 'Les 329 fournisseurs avec coordonnées, places agréées par âge et statut d’inspection de Santé publique Ottawa, dans un fichier CSV. Contient des renseignements visés par la Licence du gouvernement ouvert – Ville d’Ottawa; emplacements © contributeurs OpenStreetMap.', dlBtn: 'Télécharger le CSV',
+    ophSource: 'Santé publique Ottawa, inspections des services de garde',
     brandTag: 'Services de garde, étape par étape', footerInsights: 'Données pour la Ville',
     datesQ: 'Besoin plus tard, ou bébé pas encore né?', birthL: 'Date de naissance ou prévue', needL: 'Garde requise à partir du',
     datesHint: (age, when, date) => `Le ${date}, votre enfant aura ${when} : nous afficherons les programmes ${age}.`,
