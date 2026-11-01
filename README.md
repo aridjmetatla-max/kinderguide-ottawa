@@ -17,16 +17,26 @@ A University of Ottawa SED3111 student project. KinderGuide helps Ottawa parents
 - Your child's timeline: from the birth or due date and the date care is needed, KinderGuide searches the right age group (with a 2-year wait, a baby is usually a toddler when care starts)
 - A warning with a one-tap fix when there are fewer than 5 options, and a printable "My child care plan"
 - "Data insights for the City": infant spaces by postal area, inspection patterns and data gaps, with recommendations
+- Getting there: the nearest open O-Train station and bus stops for each centre, a "Near an O-Train station" filter, and directions by public transit
+- A waitlist tracker: status, dates and a follow-up reminder for each program; an offer brings up the 2-business-day fee subsidy deadline
+- What to get ready for the fee subsidy (from the City's own pages) and 4 things that help while you wait
+- A short guided tour on the first visit that points at the real buttons, and one short tip the first time each step is opened
 - Full French version; works on phones; no accessibility errors found by axe (WCAG 2 A/AA)
 - Google ratings and reviews are built in but switched off until the team adds a restricted API key in `config.js`
+
+## How the data stays up to date
+A GitHub Actions job (`.github/workflows/update-data.yml`) runs every Monday. It downloads the City's file and OpenStreetMap transit stops,
+places any new programs on the map, rebuilds the data and republishes the site if anything changed, then checks every official link.
+Each program keeps the same id from one file to the next, so saved shortlists and shared links keep working.
+The scripts are in `tools/`. Ottawa Public Health inspections are reloaded by the team (not automatic yet).
 
 ## Data and sources
 - Contains information licensed under the [Open Government Licence – City of Ottawa](https://ottawa.ca/en/city-hall/open-transparent-and-accountable-government/open-data) (Licensed Child Care Providers dataset).
 - Ottawa Public Health inspections of child care premises (data feed of Oct 21, 2026).
 - Visit questions paraphrased from the Government of Ontario; staff ratios from Ontario's child care licensing manual.
-- Map and address search: © OpenStreetMap contributors.
-- Where the licensee is a private person rather than an organisation, their name is not shown.
+- Map, address search, bus stops and O-Train stations: © OpenStreetMap contributors (ODbL). Stations under construction are not counted.
+- Where the licensee is a private person rather than an organisation, their name is not shown (for programs added later, a licensee name is shown only when it is clearly an organisation).
 - KinderGuide shows licensed spaces, not open spots, fees or waitlist lengths.
 
 ## Privacy
-No account, no cookies, no tracking or analytics. Shortlists, notes and checklist answers stay in the visitor's own browser. A postal code typed in the search is sent to OpenStreetMap's search service only to place it on the map. "Use my location" is used only in the browser and is never sent anywhere. A shared shortlist link contains only program codes.
+No account, no cookies, no tracking or analytics. Shortlists, notes and checklist answers stay in the visitor's own browser. A postal code typed in the search is sent to OpenStreetMap's search service only to place it on the map. "Use my location" is used only in the browser and is never sent anywhere. A shared shortlist link contains only program codes. The waitlist tracker stays on the visitor's device.

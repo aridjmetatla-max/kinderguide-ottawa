@@ -14,7 +14,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const BY_ID = Object.fromEntries(PROVIDERS.map(p => [p.id, p]));
 const CENTRES = PROVIDERS.filter(p => p.kind === 'centre');
 const AGE = Object.fromEntries(AGES.map(a => [a.key, a]));
-const MAX_PICKS = 9, MIN_PICKS = 5;
+const MAX_PICKS = 9, MIN_PICKS = 5, STALE_DAYS = 90;
 const STEPS = ['find', 'shortlist', 'visit', 'apply'];
 
 function km(a, b) {
@@ -36,6 +36,7 @@ const state = Object.assign({
   french: false, indigenous: false, agencies: true, okOnly: false,
   shortlist: [], notes: {}, visited: {}, answers: {}, qnotes: {}, clFor: 'general', clMode: 'top',
   tasks: {}, estAge: 'toddler', estDays: 5, tourDone: false, slMode: 'list', gplaces: {},
+  trainOnly: false, wait: {}, hints: {},
 }, (() => {
   try {
     const v2 = JSON.parse(localStorage.getItem(KEY));
@@ -45,6 +46,7 @@ const state = Object.assign({
   } catch (e) { return {}; }
 })());
 state.shortlist = state.shortlist.filter(id => BY_ID[id]);
+state.wait = state.wait || {}; state.hints = state.hints || {};
 const params = new URLSearchParams(location.search);
 if (params.get('lang') === 'fr' || params.get('lang') === 'en') state.lang = params.get('lang');
 if (!state.lang) state.lang = (navigator.language || 'en').toLowerCase().startsWith('fr') ? 'fr' : 'en';
@@ -115,7 +117,7 @@ function go(view, { scroll = true } = {}) {
   if (scroll) window.scrollTo({ top: 0 });
   closePanel(); hideKip();
   ({ home: renderHome, find: renderFind, shortlist: renderShortlist, visit: renderVisit, apply: renderApply, services: renderServices, about: renderAbout, insights: renderInsights })[view]();
-  renderStepper();
+  renderStepper(); showHint(view);
   if (view === 'find') setTimeout(() => { if (map) { map.invalidateSize(); renderMap(lastList); } }, 120);
   const idx = STEPS.indexOf(view);
   ['slEyebrow', 'vEyebrow', 'aEyebrow'].forEach(id => { const n = { slEyebrow: 2, vEyebrow: 3, aEyebrow: 4 }[id]; $(id).textContent = `${state.lang === 'fr' ? 'Étape' : 'Step'} ${n} ${state.lang === 'fr' ? 'sur' : 'of'} 4`; });
@@ -224,9 +226,9 @@ function renderFindControls() {
   $('fRadius').innerHTML = [[2, '2 km'], [5, '5 km'], [10, '10 km'], [0, t('all')]].map(([v, l]) => `<button type="button" data-r="${v}" class="${state.radius === v ? 'on' : ''}">${esc(l)}</button>`).join('');
   $('fRadius').setAttribute('aria-label', t('within'));
   $('fQuery').placeholder = t('search'); $('fQuery').value = state.query;
-  const n = [state.french, state.indigenous, !state.agencies, state.okOnly, state.route].filter(Boolean).length;
+  const n = [state.french, state.indigenous, !state.agencies, state.okOnly, state.trainOnly, state.route].filter(Boolean).length;
   $('fCount').hidden = !n; $('fCount').textContent = n;
-  $('filterPop').innerHTML = [['french', 'french'], ['indigenous', 'indigenous'], ['agencies', 'homeAg'], ['okOnly', 'okOnly']]
+  $('filterPop').innerHTML = [['french', 'french'], ['indigenous', 'indigenous'], ['agencies', 'homeAg'], ['okOnly', 'okOnly'], ['trainOnly', 'nearTrain']]
     .map(([k, l]) => `<label class="check"><input type="checkbox" data-f="${k}" ${state[k] ? 'checked' : ''}> ${esc(t(l))}</label>`).join('') +
     (state.home && state.work ? `<label class="check"><input type="checkbox" data-f="route" ${state.route ? 'checked' : ''}> ${ic('route', 'sm')}${esc(t('onRoute'))}</label>` : '');
   $('legend').innerHTML = `<span><i style="background:${COLORS.centre}"></i>${state.lang === 'fr' ? 'Centre' : 'Centre'}</span><span><i style="background:${COLORS.home}"></i>${esc(t('agency'))}</span><span><i style="background:${COLORS.saved}"></i>${esc(t('saved'))}</span>`;
@@ -265,6 +267,7 @@ function matches(p) {
   if (state.french && !p.french) return false;
   if (state.indigenous && !p.indigenous) return false;
   if (state.okOnly && insp(p).kind !== 'ok') return false;
+  if (state.trainOnly && !(TRANSIT[p.id] && TRANSIT[p.id].train && p.kind === 'centre')) return false;
   if (state.query && !fold([p.name, p.address, p.operator, p.city, p.postal].join(' ')).includes(fold(state.query))) return false;
   if (p.kind === 'centre' && state.age !== 'any' && !(p.spaces[state.age] > 0)) return false;
   if (routeOn()) return kmToSegment(p, state.home, state.work) <= Math.max(1.5, (state.radius || 5) / 3);
@@ -283,7 +286,9 @@ function ageTags(p) {
   if (p.kind === 'home') return `<span class="tag home">${esc(t('agency'))}</span>`;
   return AGES.filter(a => p.spaces[a.key] > 0).map(a => `<span class="tag${state.age === a.key ? ' match' : ''}">${esc(tr(a.label))}</span>`).join('');
 }
-const extraTags = p => (p.french ? `<span class="tag fr">FR</span>` : '') + (p.indigenous ? `<span class="tag ind">${esc(t('indigenous'))}</span>` : '');
+const trainOf = p => p.kind === 'centre' && TRANSIT[p.id] && TRANSIT[p.id].train ? TRANSIT[p.id] : null;
+const extraTags = p => (p.french ? `<span class="tag fr">FR</span>` : '') + (p.indigenous ? `<span class="tag ind">${esc(t('indigenous'))}</span>` : '')
+  + (trainOf(p) ? `<span class="tag tr" title="${esc(t('trainNear', trainOf(p).train, trainOf(p).trainM))}">${ic('train', 'sm')}O-Train ${fmt(trainOf(p).trainM)} m</span>` : '');
 function distText(p) {
   if (routeOn()) return detour(p) < .15 ? t('onWay') : `+${kmText(detour(p))} ${t('detour')}`;
   return state.home ? kmText(km(state.home, p)) + (p.approx ? ' ~' : '') : '';
@@ -299,7 +304,8 @@ function renderList() {
       <div class="pc-top"><div><h3>${esc(p.name)}</h3><div class="where">${esc(p.address)}${distText(p) ? ' · <b>' + esc(distText(p)) + '</b>' : ''}</div></div>${heartBtn(p.id)}</div>
       <div class="tags">${ageTags(p)}${extraTags(p)}${inspBadge(p, true)}</div></article>`).join('') + (list.length > 160 ? `<p class="empty">+${list.length - 160}…</p>` : '')
     : `<div class="empty glass">${esc(t('noResults'))}</div>`;
-  $('results').insertAdjacentHTML('beforeend', `<p class="data-date">${ic('info', 'sm')}${esc(t('dataDate', dateText(DATA_META.downloaded), dateText(INSPECTIONS_META.feed)))} <button class="link" data-view="about">${esc(t('footerAbout'))}</button></p>`);
+  const stale = (Date.now() - new Date(DATA_META.downloaded + 'T12:00:00')) / 864e5 > STALE_DAYS;
+  $('results').insertAdjacentHTML('beforeend', `<p class="data-date${stale ? ' stale' : ''}">${ic(stale ? 'alert' : 'info', 'sm')}${esc(stale ? t('stale', dateText(DATA_META.downloaded)) : t('dataDate', dateText(DATA_META.downloaded), dateText(INSPECTIONS_META.feed)))} <button class="link" data-view="about">${esc(t('footerAbout'))}</button></p>`);
   renderMap(list);
 }
 function countAt(r) { const keep = state.radius; state.radius = r; const n = PROVIDERS.filter(matches).length; state.radius = keep; return n; }
@@ -361,7 +367,7 @@ function openPanel(id, tab) {
       <h2 id="pTitle">${esc(p.name)}</h2>
       <div class="p-sub">${esc(p.address)}, ${esc(p.city)} ${esc(p.postal)}${distText(p) ? ' · ' + esc(distText(p)) : ''}${p.approx ? ' · ' + esc(t('approx')) : ''}</div>
       <div class="tags" style="margin-top:8px;display:flex;gap:5px;flex-wrap:wrap">${ageTags(p)}${extraTags(p)}${inspBadge(p, true)}</div>
-      <div class="p-actions">${heartBtn(id)}${ext(`https://www.google.com/maps/dir/?api=1&destination=${q}`, t('directions'))}${ext(`https://www.google.com/search?q=${encodeURIComponent(p.name + ' Ottawa')}`, t('contact'))}<button class="btn ghost small" id="copyLink">${ic('link', 'sm')}${esc(t('copyLink'))}</button></div>
+      <div class="p-actions">${heartBtn(id)}${ext(`https://www.google.com/maps/dir/?api=1&travelmode=transit&destination=${q}`, t('directions'))}${ext(`https://www.google.com/search?q=${encodeURIComponent(p.name + ' Ottawa')}`, t('contact'))}<button class="btn ghost small" id="copyLink">${ic('link', 'sm')}${esc(t('copyLink'))}</button></div>
       <div class="tabs" role="tablist">${[['overview', 'tOverview'], ['safety', 'tSafety'], ['reviews', 'tReviews'], ['ask', 'tAsk']].map(([k, l]) => `<button role="tab" data-ptab="${k}" aria-selected="${ptab === k}" class="${ptab === k ? 'on' : ''}">${esc(t(l))}</button>`).join('')}</div>
     </div>
     <div class="p-body" id="pBody"></div>`;
@@ -377,6 +383,15 @@ function costBox(p) {
     : under6 ? `<p class="big-line">${esc(t('costCap', COSTS.cap))}</p><p class="note">${esc(t('costAsk'))}</p>` : `<p class="big-line">${esc(t('costSchool'))}</p>`;
   return `<div class="box"><h3>${ic('dollar')}${esc(t('costTitle'))}</h3>${body}<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn ghost small" data-view="apply">${esc(t('estTitle'))}</button>${ext(SOURCES.subsidy.url, t('calc'))}</div></div>`;
 }
+// Getting there: nearest O-Train station and bus stops (OpenStreetMap, worked out ahead of time by tools/build_transit.py)
+function transitBox(p) {
+  const x = TRANSIT[p.id]; if (!x || p.kind !== 'centre') return '';
+  const q = encodeURIComponent(`${p.name} ${p.address} ${p.city} ON`);
+  return `<div class="box"><h3>${ic('bus')}${esc(t('transit'))}</h3><ul class="ilist">
+      <li class="${x.train ? '' : 'muted'}">${ic('train', 'sm')}${esc(x.train ? t('trainNear', x.train, fmt(x.trainM)) : t('noTrain'))}</li>
+      ${x.bus != null ? `<li>${ic('bus', 'sm')}${esc(x.bus <= TRANSIT_META.busMetres ? t('stopsNear', x.stops) : t('busFar', fmt(x.bus)))}</li>` : ''}</ul>
+    ${ext(`https://www.google.com/maps/dir/?api=1&travelmode=transit&destination=${q}`, t('transitDir'))}<p class="note">${esc(t('transitNote'))}</p></div>`;
+}
 function renderPanelBody(p) {
   const body = $('pBody'); if (!body) return;
   if (ptab === 'overview') {
@@ -384,7 +399,7 @@ function renderPanelBody(p) {
     body.innerHTML = (p.kind === 'centre' ? `<div class="box"><h3>${ic('child')}${esc(t('spacesByAge'))}</h3><div class="bars">${AGES.map(a => `<div class="bar${state.age === a.key ? ' hi' : ''}"><span>${esc(tr(a.label))}</span><span class="track"><span class="fill" style="width:${p.spaces[a.key] ? Math.max(4, p.spaces[a.key] / max * 100) : 0}%"></span></span><span class="n">${p.spaces[a.key] || '–'}</span></div>`).join('')}</div>
         <p class="note"><b>${esc(t('licensedFor', p.capacity))}</b>: ${esc(t('spacesNote'))}</p></div>`
       : `<div class="box"><h3>${ic('home')}${esc(t('agency'))}</h3><p>${state.lang === 'fr' ? 'Garde dans la maison d’une éducatrice, supervisée par cette agence agréée. Contactez l’agence pour connaître les maisons près de chez vous.' : 'Care in a provider’s home, overseen by this licensed agency. Contact the agency to find homes near you.'}</p></div>`)
-      + costBox(p) + (p.operator ? `<p class="note">${state.lang === 'fr' ? 'Exploitant' : 'Operator'}: ${esc(p.operator)}</p>` : '');
+      + transitBox(p) + costBox(p) + `<p class="note">${p.operator ? `${state.lang === 'fr' ? 'Exploitant' : 'Operator'}: ${esc(p.operator)} · ` : ''}${ext(SOURCES.licensing.url, t('verifyLic'), 'link')}</p>`;
   } else if (ptab === 'safety') {
     const s = insp(p);
     let html = `<div class="box"><h3>${ic('shield')}${esc(t('inspTitle'))}</h3><p class="note" style="margin:0 0 10px">${esc(t('inspBy'))}</p>`;
@@ -395,7 +410,7 @@ function renderPanelBody(p) {
       if (s.r.issues.length) html += `<details class="more"><summary>${esc(t('inspIssues'))} (${s.r.issues.length})</summary><ul class="issues">${s.r.issues.map(i => `<li>${esc(i.t)} <span class="muted">· ${esc(dateText(i.d))}</span> ${i.c ? `<span class="crit">${esc(t('critical'))}</span>` : ''}</li>`).join('')}</ul></details>`;
     }
     html += `<p class="note">${esc(t('source'))}: ${esc(t('ophSource'))}, ${esc(dateText(INSPECTIONS_META.feed))}.</p></div>
-      <div class="box"><h3>${ic('file')}${esc(t('licReport'))}</h3><div style="display:flex;gap:8px;flex-wrap:wrap">${ext(SOURCES.licensing.url, t('licReport'), 'btn primary small')}<button class="btn ghost small" id="copyName">${esc(t('copyName'))}</button></div></div>`;
+      <div class="box"><h3>${ic('file')}${esc(t('licReport'))}</h3><div style="display:flex;gap:8px;flex-wrap:wrap">${ext(SOURCES.licensing.url, t('verifyLic'), 'btn primary small')}<button class="btn ghost small" id="copyName">${esc(t('copyName'))}</button></div></div>`;
     body.innerHTML = html;
     $('copyName').onclick = async () => toast((await copyText(p.name)) ? t('nameCopied') : p.name);
   } else if (ptab === 'reviews') {
@@ -508,6 +523,7 @@ function renderCompare() {
     ${row(t('cmpInsp'), ps.map(p => `<td class="${insp(p).kind === 'ok' ? 'best' : ''}">${inspBadge(p) || '–'}</td>`))}
     ${row(t('cmpVisit'), ids.map(id => { const s = score(id); return `<td>${s.g + s.u + s.c ? esc(t('score', s.g, s.u, s.c)) : '–'}</td>`; }))}
     ${row(t('cmpVisited'), ids.map(id => `<td>${state.visited[id] ? ic('check', 'sm ok') : '–'}</td>`))}
+    ${row(t('wStatus'), ids.map(id => `<td>${esc(t(wKey(wOf(id).s)))}</td>`))}
     ${row(t('notes'), ids.map(id => `<td>${esc(state.notes[id] || '')}</td>`))}
   </tbody></table></div>`;
 }
@@ -591,16 +607,51 @@ function renderApply() {
     { n: 1, h: t('task1'), d: t('task1d'), act: ext(SOURCES.registry.url, t('openReg'), 'btn primary small') },
     { n: 2, h: t('task2'), d: t('task2d'), act: state.shortlist.length ? `<button class="btn ghost small" id="copyReg2">${ic('clipboard', 'sm')}${esc(t('copyReg'))}</button>` : `<button class="btn ghost small" data-view="find">${esc(t('goFind'))}</button>`, extra: list ? `<pre>${esc(list)}</pre>` : '' },
     { n: 3, h: t('task3'), d: t('task3d'), act: `<button class="btn ghost small" id="icsBtn">${ic('bell', 'sm')}${esc(t('reminders'))}</button>` },
-    { n: 4, h: t('task4'), d: t('task4d'), act: ext(SOURCES.subsidy.url, t('calc')) },
-    { n: 5, h: t('task5'), d: t('task5d'), act: ext(SOURCES.earlyon.url, t('findEarlyon')) },
+    { n: 4, h: t('task4'), d: t('task4d'), act: ext(SOURCES.subsidy.url, t('calc')),
+      extra: `<div class="keyfact">${ic('clock', 'sm')}<span>${esc(t('subKey'))}</span></div><details class="more"><summary>${esc(t('subTitle'))}</summary><p class="flabel">${esc(t('subDocs'))}</p><ul class="ilist dots">${SUBSIDY.docs.map(x => `<li>${esc(tr(x))}</li>`).join('')}</ul>
+        <p class="flabel">${esc(t('subWho'))}</p><ul class="ilist dots">${SUBSIDY.who.map(x => `<li>${esc(tr(x))}</li>`).join('')}</ul><p class="note">${ext(SOURCES.subsidyApply.url, t('subApply'), 'link')} · ${esc(t('checked', dateText(CHECKED)))}</p></details>` },
+    { n: 5, h: t('task5'), d: t('task5d'), act: ext(SOURCES.earlyon.url, t('findEarlyon')),
+      extra: `<details class="more"><summary>${esc(t('waitTitle'))}</summary><ol class="ilist num">${WAIT_TIPS.map(x => `<li>${esc(tr(x))}</li>`).join('')}</ol></details>` },
   ];
   const done = tasks.filter(x => state.tasks[x.n]).length;
   $('tasks').innerHTML = tasks.map(x => `<li class="task glass${state.tasks[x.n] ? ' is-done' : ''}"><span class="tn">${state.tasks[x.n] ? ic('check') : x.n}</span><div><h3>${esc(x.h)}</h3><p>${esc(x.d)}</p>${x.extra || ''}
     <div class="row">${x.act}<button class="btn small ${state.tasks[x.n] ? 'done' : 'ghost'}" data-task="${x.n}" aria-pressed="${!!state.tasks[x.n]}">${state.tasks[x.n] ? ic('check', 'sm') + esc(t('done')) : esc(t('markDone'))}</button></div></div></li>`).join('');
   const C = 2 * Math.PI * 26, frac = done / tasks.length;
   $('planRing').innerHTML = `<svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="26" fill="none" stroke="rgba(15,107,107,.15)" stroke-width="7"/><circle cx="32" cy="32" r="26" fill="none" stroke="var(--good)" stroke-width="7" stroke-linecap="round" stroke-dasharray="${C * frac} ${C}" transform="rotate(-90 32 32)"/></svg><span>${esc(t('planProgress', done, tasks.length))}</span>`;
-  renderEstimator(); renderTimeline();
+  renderEstimator(); renderTimeline(); renderWaitlist();
 }
+// Waitlist tracker: status and dates for each saved program, kept only on this device
+const WSTAT = ['none', 'waiting', 'offered', 'accepted', 'declined'];
+const wKey = k => 'w' + k[0].toUpperCase() + k.slice(1);
+const wOf = id => Object.assign({ s: 'none', a: '', c: '' }, state.wait[id]);
+function renderWaitlist() {
+  const el = $('waitlist'), ids = state.shortlist;
+  const head = extra => `<div class="wl-head"><div><h2 id="wlTitle">${ic('hourglass')}${esc(t('wTitle'))}</h2><p class="muted">${esc(t('wLead'))}</p></div>${extra || ''}</div>`;
+  if (!ids.length) { el.innerHTML = head() + `<p>${esc(t('wEmpty'))}</p><button class="btn ghost small" data-view="find">${esc(t('goFind'))}${ic('arrow', 'sm')}</button>`; return; }
+  const on = ids.filter(id => ['waiting', 'offered', 'accepted'].includes(wOf(id).s)).length;
+  const offer = ids.some(id => ['offered', 'accepted'].includes(wOf(id).s));
+  el.innerHTML = head(`<span class="badge city">${esc(t('wCount', on, ids.length))}</span>`)
+    + (offer ? `<div class="tip warn">${ic('clock', 'sm')}<span>${esc(t('wOfferTip'))}</span>${ext(SOURCES.subsidyApply.url, t('subApply'), 'btn small primary')}</div>` : '')
+    + `<div class="wl-rows">${ids.map((id, i) => { const p = BY_ID[id], w = wOf(id);
+      return `<div class="wl-row s-${w.s}" data-w="${id}"><b class="wl-name">${i + 1}. ${esc(p.name)}</b>
+        <label><span>${esc(t('wStatus'))}</span><select data-wf="s">${WSTAT.map(k => `<option value="${k}"${w.s === k ? ' selected' : ''}>${esc(t(wKey(k)))}</option>`).join('')}</select></label>
+        ${w.s === 'none' ? '' : `<label><span>${esc(t('wAdded'))}</span><input type="date" class="input" data-wf="a" value="${esc(w.a)}"></label>
+        <label><span>${esc(t('wContact'))}</span><input type="date" class="input" data-wf="c" value="${esc(w.c)}"></label>
+        <button class="btn ghost small" data-wremind="${id}">${ic('bell', 'sm')}${esc(t('wRemind'))}</button>`}</div>`; }).join('')}</div>`;   // dates appear once a program is on a list
+}
+$('waitlist').addEventListener('change', e => {
+  const f = e.target.dataset.wf, id = (e.target.closest('[data-w]') || {}).dataset?.w; if (!f || !id) return;
+  state.wait[id] = Object.assign(wOf(id), { [f]: e.target.value });
+  if (f === 's' && e.target.value === 'waiting' && !state.wait[id].a) state.wait[id].a = ymd(new Date());   // first time on a list: today
+  save(); if (f === 's') renderWaitlist();
+});
+$('waitlist').addEventListener('click', e => {
+  const b = e.target.closest('[data-wremind]'); if (!b) return;
+  const p = BY_ID[b.dataset.wremind], w = wOf(p.id), base = w.c || w.a || ymd(new Date());
+  const d = new Date(addMonths(base, 3) + 'T12:00:00'); if (d < new Date()) d.setTime(Date.now() + 7 * 864e5);
+  downloadIcs('kinderguide-follow-up.ics', [{ date: d, title: t('wRemindTitle', p.name), desc: `${t('wRemindDesc')} ${location.origin}${location.pathname}#apply` }]);
+  toast(t('calDone'));
+});
 function renderTimeline() {
   if (!state.birth) { $('timeline').innerHTML = `<h3>${ic('calendar')}${esc(t('tlTitle'))}</h3><p class="muted">${esc(t('tlEmpty'))}</p><button class="btn ghost small" data-view="home">${esc(t('tlEdit'))}</button>`; return; }
   const today = ymd(new Date()), by = +state.birth.slice(0, 4);
@@ -618,7 +669,7 @@ function printPlan() {
     ${si ? `<p><b>${esc(t('ageAtStart', tr(AGE[si.group].label).toLowerCase(), dateText(si.when)))}</b></p>` : ''}
     <h2>${esc(t('planChoices'))}</h2>${state.shortlist.length ? `<ol>${state.shortlist.map(id => { const p = BY_ID[id], sc = score(id), r = INSPECTIONS[id];
       return `<li><b>${esc(p.name)}</b>, ${esc(p.address)}, ${esc(p.city)} ${esc(p.postal)}${state.home ? ' · ' + esc(kmText(km(state.home, p))) : ''}<br>
-        ${r ? `${esc(t('inspLast'))}: ${esc(dateText(r.last))} (${esc(r.ok ? t('inspOk') : t('inspBad'))}) · ` : ''}${sc.g + sc.u + sc.c ? esc(t('score', sc.g, sc.u, sc.c)) + ' · ' : ''}${state.visited[id] ? esc(t('visited')) : ''}
+        ${wOf(id).s !== 'none' ? `${esc(t(wKey(wOf(id).s)))}${wOf(id).a ? ' (' + esc(dateText(wOf(id).a)) + ')' : ''} · ` : ''}${r ? `${esc(t('inspLast'))}: ${esc(dateText(r.last))} (${esc(r.ok ? t('inspOk') : t('inspBad'))}) · ` : ''}${sc.g + sc.u + sc.c ? esc(t('score', sc.g, sc.u, sc.c)) + ' · ' : ''}${state.visited[id] ? esc(t('visited')) : ''}
         ${state.notes[id] ? `<br><i>${esc(state.notes[id])}</i>` : ''}</li>`; }).join('')}</ol>` : `<p>${esc(t('planNone'))}</p>`}
     <h2>${esc(t('planNext'))}</h2><ol>${[1, 2, 3, 4, 5].map(n => `<li>${state.tasks[n] ? '[x] ' : '[ ] '}${esc(t('task' + n))}: ${esc(t('task' + n + 'd'))}</li>`).join('')}</ol>
     ${state.birth ? `<h2>${esc(t('tlTitle'))}</h2>${$('timeline').querySelector('ol') ? $('timeline').querySelector('ol').outerHTML : ''}` : ''}
@@ -660,7 +711,7 @@ function renderServices() {
     return items.length ? `<section class="sgroup"><h2><span class="ico">${ic(g.icon)}</span>${esc(tr(g.title))}</h2><div class="sgrid">${items.map(serviceCard).join('')}</div></section>` : '';
   }).join('');
   const faqs = FAQ.filter(f => !q || fold(tr(f.q) + ' ' + tr(f.a)).includes(q));
-  $('faqList').innerHTML = faqs.map(f => `<details class="fq glass"><summary>${esc(tr(f.q))}</summary><p>${esc(tr(f.a))}${f.src ? ` ${ext(SOURCES[f.src].url, t('source'), 'link')}` : ''}</p></details>`).join('') || `<p class="muted">–</p>`;
+  $('faqList').innerHTML = faqs.map(f => `<details class="fq glass"><summary>${esc(tr(f.q))}</summary><p>${esc(tr(f.a))}${f.src ? ` ${ext(SOURCES[f.src].url, t('source'), 'link')} <span class="muted">· ${esc(t('checked', dateText(CHECKED)))}</span>` : ''}</p></details>`).join('') || `<p class="muted">–</p>`;
 }
 $('svcQuery').addEventListener('input', renderServices);
 
@@ -677,14 +728,23 @@ function renderAbout() {
         <div><b>${fr ? 'Interprétation' : 'Interpretation'}</b>${fr ? 'Les parents de poupons ont beaucoup moins de choix : il faut savoir tôt quels centres les accueillent.' : 'Parents of babies have far fewer choices, so it helps to know early which centres take babies.'}</div>
         <div><b>${fr ? 'Recommandation' : 'Recommendation'}</b>${fr ? 'Inscrivez-vous tôt et filtrez par âge. Les places agréées ne sont pas des places libres.' : 'Register early and filter by age. Licensed spaces are not open spots.'}</div></div></div>
     <div class="glass card-pad"><h3>${fr ? 'Les données' : 'The data'}</h3><ul>
-      <li>${ext(SOURCES.data.url, SOURCES.data.label, 'link')}: ${fmt(CENTRES.length)} ${fr ? 'centres et' : 'centres and'} ${PROVIDERS.length - CENTRES.length} ${fr ? 'agences' : 'agencies'}. ${fr ? 'Téléchargé le' : 'Downloaded'} ${esc(DATA_META.downloaded)}.</li>
+      <li>${ext(SOURCES.data.url, SOURCES.data.label, 'link')}: ${fmt(CENTRES.length)} ${fr ? 'centres et' : 'centres and'} ${PROVIDERS.length - CENTRES.length} ${fr ? 'agences' : 'agencies'}. ${fr ? 'Téléchargé le' : 'Downloaded'} ${esc(dateText(DATA_META.downloaded))}.</li>
       <li>${esc(INSPECTIONS_META.source)} (${esc(INSPECTIONS_META.feed)}): ${fmt(INSPECTIONS_META.matched)} ${fr ? 'programmes jumelés par adresse et nom; les cas incertains sont exclus.' : 'programs matched by address and name; unsure matches are left out.'}</li>
       <li>${fr ? 'Emplacements : OpenStreetMap' : 'Locations: OpenStreetMap'}; ${PROVIDERS.filter(p => p.approx).length} ${fr ? 'sont approximatifs.' : 'are approximate.'}</li>
+      <li>${fr ? 'Arrêts d’autobus et stations de l’O-Train ouvertes' : 'Bus stops and open O-Train stations'}: ${ext(SOURCES.osm.url, 'OpenStreetMap', 'link')} (${esc(dateText(TRANSIT_META.downloaded))}). ${fr ? 'Les stations en construction ne sont pas comptées.' : 'Stations under construction are not counted.'}</li>
       <li>${fr ? 'Questions et ratios : gouvernement de l’Ontario. Frais : plafond de l’Ontario' : 'Questions and ratios: Government of Ontario. Fees: Ontario’s cap'} (${ext(SOURCES.cap.url, 'CP 2026', 'link')}).</li></ul></div>
     <div class="glass card-pad"><h3>${esc(t('limits'))}</h3><ul>
       <li>${fr ? 'Aucune place libre, liste d’attente ni tarif par centre : ces données ne sont pas publiées.' : 'No open spots, waitlists or prices per centre: these are not published.'}</li>
       <li>${fr ? 'Les inspections portent sur l’hygiène, pas sur la qualité.' : 'Inspections cover hygiene, not quality.'}</li>
-      <li>${fr ? 'La date des données de la Ville est à confirmer; une mise à jour est en préparation.' : 'The date of the City data is being confirmed; the City is preparing an update.'}</li></ul></div>
+      <li>${fr ? 'Les distances sont à vol d’oiseau, pas des temps de trajet.' : 'Distances are straight-line, not travel times.'}</li>
+      <li>${fr ? `Fichier de la Ville mis à jour le ${esc(dateText(DATA_META.cityUpdated))} (date du portail); la Ville prépare une nouvelle version.` : `City file last updated ${esc(dateText(DATA_META.cityUpdated))} (portal date); the City is preparing a new version.`}</li></ul></div>
+    <div class="glass card-pad wide"><h3>${ic('refresh')}${esc(t('updTitle'))}</h3><ul class="ilist dots">
+      <li>${fr ? 'Chaque semaine, une tâche automatique télécharge le fichier de la Ville, place les nouveaux programmes sur la carte, vérifie tous les liens officiels et republie le site.' : 'Every week, an automatic job downloads the City’s file, maps any new programs, checks every official link and republishes the site.'}</li>
+      <li>${fr ? 'Chaque réponse montre sa source officielle et la date de vérification.' : 'Each answer shows its official source and the date it was checked.'}</li>
+      <li>${fr ? 'Chaque programme a un lien vers la recherche de l’Ontario pour confirmer son permis.' : 'Each program links to Ontario’s licensing search, to confirm its licence.'}</li>
+      <li>${fr ? `Si les données ont plus de ${STALE_DAYS} jours, le site l’indique aux parents.` : `If the data is more than ${STALE_DAYS} days old, the site tells parents.`}</li>
+      <li>${fr ? 'Les inspections de Santé publique sont rechargées par l’équipe (pas encore automatique).' : 'Public Health inspections are reloaded by the team (not automatic yet).'}</li></ul>
+      <p class="note">${fr ? 'Code et scripts : dépôt GitHub du projet (dossier tools).' : 'Code and scripts: the project’s GitHub repository (tools folder).'}</p></div>
     <div class="glass card-pad"><h3>${esc(t('privacy'))}</h3><ul>
       <li>${fr ? 'Aucun compte, aucun témoin, aucun suivi.' : 'No account, no cookies, no tracking.'}</li>
       <li>${fr ? 'Votre liste et vos notes restent sur cet appareil.' : 'Your shortlist and notes stay on this device.'}</li>
@@ -723,6 +783,9 @@ function renderInsights() {
   const maxIss = topIssues.length ? topIssues[0][1] : 1;
   const unmatched = CENTRES.filter(p => !INSPECTIONS[p.id]).length;
   const totalInfant = CENTRES.reduce((s, p) => s + p.spaces.infant, 0), total = CENTRES.reduce((s, p) => s + p.capacity, 0);
+  const nearT = p => TRANSIT[p.id] && TRANSIT[p.id].train, infC = CENTRES.filter(p => p.spaces.infant > 0);
+  const tr_ = { inf: infC.length, infNear: infC.filter(nearT).length, infSpNear: infC.filter(nearT).reduce((s, p) => s + p.spaces.infant, 0),
+    near: CENTRES.filter(nearT).length, bus: CENTRES.filter(p => TRANSIT[p.id] && TRANSIT[p.id].bus <= TRANSIT_META.busMetres).length };
   const bar = (label, n, max, note, hi) => `<div class="bar wide${hi ? ' hi' : ''}"><span>${esc(label)}</span><span class="track"><span class="fill" style="width:${Math.max(2, n / max * 100)}%"></span></span><span class="n">${esc(note)}</span></div>`;
   $('insights').innerHTML = `
     <div class="kpis">
@@ -743,6 +806,13 @@ function renderInsights() {
         <p class="muted">${fr ? 'Santé publique Ottawa, 2 dernières années, nombre de centres.' : 'Ottawa Public Health, last 2 years, number of centres.'}</p>
         <div class="bars">${topIssues.map(([k, n]) => bar(k, n, maxIss, String(n))).join('')}</div></section>
     </div>
+    <section class="glass card-pad transit-ins"><h2>${ic('train')}${fr ? 'Accès en transport en commun' : 'Transit access'}</h2>
+      <div class="kpis mini">
+        <div><b>${tr_.infNear} / ${tr_.inf}</b><span>${fr ? `centres avec places pour poupons à moins de 1 km d’une station de l’O-Train ouverte (${fmt(tr_.infSpNear)} des ${fmt(totalInfant)} places)` : `centres with infant spaces within 1 km of an open O-Train station (${fmt(tr_.infSpNear)} of ${fmt(totalInfant)} spaces)`}</span></div>
+        <div><b>${tr_.near} / ${CENTRES.length}</b><span>${fr ? 'centres à moins de 1 km d’une station de l’O-Train' : 'centres within 1 km of an O-Train station'}</span></div>
+        <div><b>${tr_.bus} / ${CENTRES.length}</b><span>${fr ? 'centres avec un arrêt d’autobus à 5 minutes à pied (400 m)' : 'centres with a bus stop within a 5-minute walk (400 m)'}</span></div>
+      </div>
+      <p class="note">${fr ? 'OpenStreetMap, distances à vol d’oiseau. Les stations en construction (prolongements est, ouest et sud) ne sont pas comptées : à refaire à leur ouverture.' : 'OpenStreetMap, straight-line distances. Stations under construction (east, west and south extensions) are not counted: worth redoing when they open.'}</p></section>
     <div class="oim glass card-pad">
       <div><b>${fr ? 'Observation' : 'Observation'}</b>${fr ? `${noInfant.length} zones postales ont des centres mais aucune place pour poupons, et les poupons n’ont que ${(totalInfant / total * 100).toFixed(1)} % des places.` : `${noInfant.length} postal areas have centres but no infant spaces, and babies have only ${(totalInfant / total * 100).toFixed(1)}% of all spaces.`}</div>
       <div><b>${fr ? 'Interprétation' : 'Interpretation'}</b>${fr ? 'Les familles de poupons de ces zones doivent probablement chercher plus loin. Il faudrait comparer avec le nombre de jeunes enfants par zone (recensement) avant de conclure.' : 'Families with babies in these areas probably have to search further away. This should be compared with the number of young children per area (census) before drawing conclusions.'}</div>
@@ -753,10 +823,10 @@ function renderInsights() {
 }
 
 function matchedCsv() {
-  const head = ['id', 'name', 'operator', 'address', 'city', 'postal', 'postal_area', 'latitude', 'longitude', 'location_approximate', 'infant', 'toddler', 'preschool', 'kindergarten', 'school_age', 'licensed_capacity', 'french_service', 'indigenous_programming', 'oph_last_inspection', 'oph_last_result', 'oph_inspections_2y', 'oph_not_in_compliance_2y'];
+  const head = ['id', 'name', 'operator', 'address', 'city', 'postal', 'postal_area', 'latitude', 'longitude', 'location_approximate', 'infant', 'toddler', 'preschool', 'kindergarten', 'school_age', 'licensed_capacity', 'french_service', 'indigenous_programming', 'oph_last_inspection', 'oph_last_result', 'oph_inspections_2y', 'oph_not_in_compliance_2y', 'nearest_bus_stop_m', 'bus_stops_within_400m', 'otrain_station_within_1km', 'otrain_station_m'];
   const q = v => { const x = String(v ?? ''); return /[",\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; };
   const rows = PROVIDERS.map(p => { const r = INSPECTIONS[p.id] || {};
-    return [p.id, p.name, p.operator, p.address, p.city, p.postal, (p.postal || '').slice(0, 3), p.lat, p.lon, p.approx ? 'yes' : 'no', ...['infant', 'toddler', 'preschool', 'kindergarten', 'schoolAge'].map(k => p.spaces ? p.spaces[k] : ''), p.capacity ?? '', p.french ? 'yes' : 'no', p.indigenous ? 'yes' : 'no', r.last || '', r.last ? (r.ok ? 'in compliance' : 'not in compliance') : '', r.n2y ?? '', r.bad2y ?? ''].map(q).join(','); });
+    return [p.id, p.name, p.operator, p.address, p.city, p.postal, (p.postal || '').slice(0, 3), p.lat, p.lon, p.approx ? 'yes' : 'no', ...['infant', 'toddler', 'preschool', 'kindergarten', 'schoolAge'].map(k => p.spaces ? p.spaces[k] : ''), p.capacity ?? '', p.french ? 'yes' : 'no', p.indigenous ? 'yes' : 'no', r.last || '', r.last ? (r.ok ? 'in compliance' : 'not in compliance') : '', r.n2y ?? '', r.bad2y ?? '', ...(p.kind === 'centre' && TRANSIT[p.id] ? [TRANSIT[p.id].bus, TRANSIT[p.id].stops, TRANSIT[p.id].train || '', TRANSIT[p.id].trainM ?? ''] : ['', '', '', ''])].map(q).join(','); });
   return [head.join(','), ...rows].join('\r\n');
 }
 document.addEventListener('click', e => {
@@ -780,19 +850,59 @@ document.addEventListener('click', e => {
   if (e.target.closest('#kipTour')) { hideKip(); showTour(0); return; }
   if (!e.target.closest('#kipBubble, #kipFab, #helpTop')) hideKip();
 });
+// First-visit tour: a spotlight on the real controls, one at a time (works with keyboard: Enter, arrows, Escape)
 let tourStep = 0;
+const visible = el => !!el && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden';
+function tourTarget(s) { return (s.target || []).map(q => document.querySelector(q)).find(visible) || null; }
+function placeTour() {
+  if ($('tour').hidden) return;
+  const el = tourTarget(TOUR[tourStep]), spot = $('tourSpot'), card = $('tourCard');
+  $('tour').classList.toggle('centred', !el);
+  if (!el) { spot.style.cssText = 'display:none'; card.style.cssText = ''; return; }
+  const r = el.getBoundingClientRect(), pad = 8, vw = innerWidth, vh = innerHeight;
+  spot.style.cssText = `display:block;left:${r.left - pad}px;top:${r.top - pad}px;width:${r.width + pad * 2}px;height:${r.height + pad * 2}px`;
+  const cw = Math.min(360, vw - 32), ch = card.offsetHeight;
+  const below = r.bottom + pad + 12 + ch < vh, top = below ? r.bottom + pad + 12 : Math.max(16, r.top - pad - 12 - ch);
+  card.style.cssText = `position:fixed;width:${cw}px;left:${Math.max(16, Math.min(vw - cw - 16, r.left + r.width / 2 - cw / 2))}px;top:${top}px`;
+}
 function showTour(i) {
   tourStep = i; const s = TOUR[i];
-  if (s.view) go(s.view);
+  if (current !== 'home') go('home');
+  hideHint();
   $('tourTitle').textContent = tr(s.title); $('tourText').textContent = tr(s.text);
+  $('tourCount').textContent = t('tourOf', i + 1, TOUR.length);
   $('tourDots').innerHTML = TOUR.map((_, j) => `<i class="${j === i ? 'on' : ''}"></i>`).join('');
-  $('tourNext').textContent = i === TOUR.length - 1 ? t('tourGo') : t('tourNext'); $('tourSkip').textContent = t('tourSkip');
-  $('tour').hidden = false; $('tourNext').focus();
+  $('tourNext').textContent = i === TOUR.length - 1 ? t('tourGo') : t('tourNext');
+  $('tourSkip').textContent = i ? t('tourBack') : t('tourSkip');
+  $('tourKip').toggleAttribute('hidden', i > 0);   // an SVG has no .hidden property
+  $('tour').hidden = false;
+  const el = tourTarget(s);
+  if (el) { const r = el.getBoundingClientRect(); if (r.top < 80 || r.bottom > innerHeight - 40) el.scrollIntoView({ block: 'center' }); }
+  requestAnimationFrame(() => { placeTour(); $('tourNext').focus(); });
 }
-function endTour() { $('tour').hidden = true; state.tourDone = true; save(); go('home'); }
+function endTour() { $('tour').hidden = true; state.tourDone = true; save(); go('home', { scroll: false }); const c = document.querySelector('#ageChips .chip'); if (c) c.focus(); }
 $('tourNext').addEventListener('click', () => tourStep < TOUR.length - 1 ? showTour(tourStep + 1) : endTour());
-$('tourSkip').addEventListener('click', endTour);
+$('tourSkip').addEventListener('click', () => tourStep ? showTour(tourStep - 1) : endTour());
+$('tourClose').addEventListener('click', endTour);
 $('tourAgain').addEventListener('click', () => showTour(0));
+$('tour').addEventListener('keydown', e => {
+  if (e.key === 'Escape') { e.stopPropagation(); endTour(); }
+  else if (e.key === 'ArrowRight' && tourStep < TOUR.length - 1) showTour(tourStep + 1);
+  else if (e.key === 'ArrowLeft' && tourStep) showTour(tourStep - 1);
+});
+addEventListener('resize', placeTour); addEventListener('scroll', placeTour, { passive: true });
+
+// First time on each step: one short tip at the top of the page, closed with "Got it"
+function hideHint() { const h = document.querySelector('.page-hint'); if (h) h.remove(); }
+function showHint(view) {
+  hideHint();
+  const k = PAGE_HINTS[view]; if (!k || state.hints[view] || !$('tour').hidden) return;
+  const box = document.createElement('div');
+  box.className = 'page-hint'; box.setAttribute('role', 'note');
+  box.innerHTML = `${ic('info')}<p><b>${esc(t('hintShow'))}</b>${esc(t(k))}</p><button class="btn small primary" data-hint="${view}">${esc(t('hintGot'))}</button>`;
+  const sec = $('view-' + view); sec.insertBefore(box, sec.firstChild);
+}
+document.addEventListener('click', e => { const b = e.target.closest('[data-hint]'); if (b) { state.hints[b.dataset.hint] = true; save(); hideHint(); } });
 
 /* ---------- 12. Start-up and language ---------- */
 function fillIcons(root = document) { root.querySelectorAll('[data-ic]').forEach(el => { el.innerHTML = ic(el.dataset.ic); el.removeAttribute('data-ic'); }); }

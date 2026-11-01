@@ -13,7 +13,9 @@ const SOURCES = {
   findPay: { label: 'Government of Ontario: Find and pay for child care', url: 'https://www.ontario.ca/children-and-youth/find-and-pay-child-care' },
   cap: { label: 'The Canadian Press: Affordable child-care program extended in Ontario (Sept 29, 2026)', url: 'https://www.cp24.com/politics/queens-park/2026/09/29/affordable-child-care-program-extended-in-ontario-but-not-to-10-a-day/' },
   cwelcc: { label: 'City of Ottawa: National child care system ($10-a-day program)', url: 'https://ottawa.ca/en/family-and-social-services/childrens-services/national-child-care-system' },
-  subsidy: { label: 'City of Ottawa: Get help with your child care costs', url: 'https://ottawa.ca/en/family-and-social-services/childrens-services/get-help-your-child-care-costs' },
+  subsidy: { label: 'City of Ottawa: Child care fee subsidy (eligibility calculator)', url: 'https://ottawa.ca/en/family-and-social-services/childrens-services/child-care-fee-subsidy/about' },
+  subsidyApply: { label: 'City of Ottawa: Apply for child care fee subsidy (eligibility and documents)', url: 'https://ottawa.ca/en/family-and-social-services/childrens-services/child-care-fee-subsidy/apply-child-care-fee-subsidy' },
+  osm: { label: 'OpenStreetMap contributors (bus stops and O-Train stations, ODbL)', url: 'https://www.openstreetmap.org/copyright' },
   waitGuide: { label: 'Military Family Services: Navigating child care in Ottawa (2026 FAQ)', url: 'https://cfmws.ca/CFMWS/media/NationalCapitalRegion/documents/MFS/FAQ-Navigating-childcare-in-Ottawa-and-Quebec-2026.pdf' },
   earlyon: { label: 'City of Ottawa: EarlyON Child and Family Centres', url: 'https://ottawa.ca/en/family-and-social-services/childrens-services/earlyon' },
   specialNeeds: { label: 'City of Ottawa: Special needs child care', url: 'https://ottawa.ca/en/family-and-social-services/childrens-services/special-needs-child-care' },
@@ -166,7 +168,9 @@ const FAQ = [
   { q: { en: 'What about before and after school care?', fr: 'Et les services avant et après l’école?' },
     a: { en: 'Choose “School age” in Find. Fees for children 6 and over are set by each program and are not capped.', fr: 'Choisissez « Âge scolaire » dans Trouver. Les frais pour les 6 ans et plus sont fixés par chaque programme.' }, src: 'ocdsbFees' },
   { q: { en: 'Can I get help paying?', fr: 'Puis-je obtenir de l’aide pour payer?' },
-    a: { en: 'Yes, the City’s fee subsidy is based on family income. Use its calculator.', fr: 'Oui, la subvention de la Ville dépend du revenu familial. Utilisez sa calculatrice.' }, src: 'subsidy' },
+    a: { en: 'Yes, the City’s fee subsidy is based on family income and your reason for care. Its calculator tells you if you may qualify.', fr: 'Oui, la subvention de la Ville dépend du revenu familial et de la raison de la garde. Sa calculatrice indique si vous pourriez y avoir droit.' }, src: 'subsidy' },
+  { q: { en: 'When do I apply for the fee subsidy?', fr: 'Quand demander la subvention?' },
+    a: { en: 'After you secure a space. From then, you have 2 business days to apply and send your documents, so get them ready while you wait.', fr: 'Après avoir obtenu une place. Vous avez alors 2 jours ouvrables pour faire la demande et envoyer vos documents : préparez-les pendant l’attente.' }, src: 'subsidyApply' },
   { q: { en: 'Is my information private?', fr: 'Mes renseignements sont-ils privés?' },
     a: { en: 'Yes. No account, no tracking. Your shortlist and notes stay on this device.', fr: 'Oui. Aucun compte, aucun suivi. Votre liste et vos notes restent sur cet appareil.' }, src: null },
 ];
@@ -178,6 +182,33 @@ const COSTS = {
 // Prices confirmed with a centre (website, phone or email). Empty until the team confirms some.
 // Format: { c12: { text: '$22/day for toddlers', how: 'phone call', date: '2026-10-28' } }
 const VERIFIED_PRICES = {};
+
+// Date the team last checked the official sources (tools/check_links.py checks every link)
+const CHECKED = '2026-11-01';
+
+// While you wait: what helps during a long wait (registry rule and City subsidy rule, plus practical advice)
+const WAIT_TIPS = [
+  { en: 'Log in to the registry every 60 days, and update it if your dates or address change.', fr: 'Connectez-vous au registre tous les 60 jours et mettez-le à jour si vos dates ou votre adresse changent.' },
+  { en: 'Every 2 to 3 months, contact your top 3 programs: check you are on their list and ask about part-time or other start dates.', fr: 'Tous les 2 ou 3 mois, contactez vos 3 premiers choix : vérifiez que vous êtes sur leur liste et demandez s’il y a du temps partiel ou d’autres dates.' },
+  { en: 'Get your fee subsidy documents ready now. Once you secure a space, you have 2 business days to apply.', fr: 'Préparez dès maintenant vos documents de subvention. Une fois la place obtenue, vous avez 2 jours ouvrables pour faire la demande.' },
+  { en: 'Keep a backup: licensed home child care agencies, and free EarlyON play groups.', fr: 'Gardez un plan B : agences de garde en milieu familial agréées et groupes de jeu ON y va gratuits.' },
+];
+// City of Ottawa fee subsidy: who can qualify and what to have ready (summary of the City's pages, checked Nov 1, 2026)
+const SUBSIDY = {
+  who: [
+    { en: 'Working, in school or in training', fr: 'Au travail, aux études ou en formation' },
+    { en: 'Looking for work (up to 6 months in 24)', fr: 'En recherche d’emploi (jusqu’à 6 mois sur 24)' },
+    { en: 'Receiving Ontario Works or ODSP', fr: 'Bénéficiaire d’Ontario au travail ou du POSPH' },
+    { en: 'A social or special need (parent or child)', fr: 'Un besoin social ou particulier (parent ou enfant)' },
+  ],
+  docs: [
+    { en: 'Notice of Assessment for each parent (latest tax year). The calculator uses line 236.', fr: 'Avis de cotisation de chaque parent (dernière année). La calculatrice utilise la ligne 236.' },
+    { en: 'Identity and status in Canada for each family member (birth certificate, passport or PR card; not a driver’s licence or health card)', fr: 'Identité et statut au Canada de chaque membre de la famille (acte de naissance, passeport ou carte de RP; pas de permis de conduire ni de carte santé)' },
+    { en: 'Proof of your reason for care, such as 2 recent pay stubs or a school schedule', fr: 'Preuve de la raison de la garde, comme 2 talons de paie récents ou un horaire de cours' },
+    { en: 'Proof of an Ottawa address, dated in the last 90 days, if it is not on your Notice of Assessment', fr: 'Preuve d’adresse à Ottawa, datée des 90 derniers jours, si elle n’est pas sur votre avis de cotisation' },
+    { en: 'A custody document, if the other parent does not live with you', fr: 'Un document de garde, si l’autre parent n’habite pas avec vous' },
+  ],
+};
 
 // Example tips for the parents' space preview (clearly labelled as examples, not real reviews)
 const EXAMPLE_TIPS = [
@@ -192,7 +223,7 @@ const I18N = {
     skip: 'Skip to content', brandSub: 'Ottawa',
     copyLink: 'Copy link', linkCopied: 'Link copied. Anyone can open this program with it.', searching: 'Searching…',
     dataDate: (a, b) => `Data: City of Ottawa open data (downloaded ${a}) and Ottawa Public Health (${b}).`,
-    dlTitle: 'Download the matched data', dlLead: 'All 329 providers with map coordinates, licensed spaces by age and Ottawa Public Health inspection status, as one CSV file. Contains information licensed under the Open Government Licence – City of Ottawa; locations © OpenStreetMap contributors.', dlBtn: 'Download CSV',
+    dlTitle: 'Download the matched data', dlLead: 'All 329 providers with map coordinates, licensed spaces by age, Ottawa Public Health inspection status and the nearest bus stop and O-Train station, as one CSV file. Contains information licensed under the Open Government Licence – City of Ottawa; locations © OpenStreetMap contributors.', dlBtn: 'Download CSV',
     ophSource: 'Ottawa Public Health, inspections of child care premises',
     brandTag: 'Child care, step by step', footerInsights: 'Data insights for the City',
     datesQ: 'Need care later, or baby not born yet?', birthL: 'Birth or due date', needL: 'Care needed from',
@@ -263,10 +294,10 @@ const I18N = {
     faqTitle: 'Questions and answers', faqLead: 'Short answers to common questions, with the official source.', source: 'Source',
     aboutTitle: 'About the data', privacy: 'Privacy', limits: 'Limits', forCity: 'For the City of Ottawa',
     tourNext: 'Next', tourSkip: 'Skip', tourGo: 'Let’s go!',
-    kipFind: 'Choose your child’s age and where you live. Tap a program to see its details. Tap Save to keep it.',
+    kipFind: 'Each card is a licensed program. Tap one to see its spaces, inspections and how to get there. Tap Save to keep it for step 2.',
     kipShortlist: 'Save 5 to 9 programs. Use ↑ ↓ to rank them. Compare them side by side, or share the list with your partner.',
     kipVisit: 'On a visit, ask the Top 10 questions first. Mark each answer. Everything stays on this device.',
-    kipApply: 'Register on the City’s list, add your choices, then log in every 60 days. Tick each task when it is done.',
+    kipApply: 'Register on the City’s list, add your choices, then log in every 60 days. Below, track each waitlist and get your subsidy documents ready.',
     kipHome: 'Start with your child’s age and your postal code. KinderGuide will guide you, step by step.',
     kipServices: 'Every official website, grouped by task. Search, or read the common questions.',
     toastSaved: (n) => `Saved. ${n} of 9 on your shortlist.`, toastRemoved: 'Removed from your shortlist.', toastFull: 'You already have 9. Remove one first.',
@@ -274,12 +305,27 @@ const I18N = {
     nearX: x => `Near ${x}`, yourLoc: 'your location', km: 'km',
     footerAbout: 'About the data', footerTour: 'Take the tour', footerP1: 'Prototype 1',
     lang: 'Français',
+    transit: 'Getting there', trainNear: (s, m) => `O-Train ${s} station, ${m} m away`, noTrain: 'No open O-Train station within 1 km',
+    stopsNear: n => `${n} bus stop${n === 1 ? '' : 's'} within a 5-minute walk (400 m)`, busFar: m => `Nearest bus stop: ${m} m`,
+    transitDir: 'Transit directions', transitNote: 'Stop locations: OpenStreetMap. Straight-line distance; check routes and times with OC Transpo.',
+    nearTrain: 'Near an O-Train station (1 km)', verifyLic: 'Verify the licence with Ontario',
+    stale: d => `This data was downloaded on ${d} and may have changed. Confirm with the program.`, checked: d => `checked ${d}`,
+    wTitle: 'Track your waitlist', wLead: 'Note where you are with each program. It stays on this device.', wStatus: 'Status', wAdded: 'Added on', wContact: 'Last contact',
+    wNone: 'Not added yet', wWaiting: 'On the waitlist', wOffered: 'Offered a space', wAccepted: 'Accepted', wDeclined: 'Declined',
+    wRemind: 'Remind me in 3 months', wRemindTitle: n => `Follow up with ${n}`, wRemindDesc: 'Call or email to check you are still on their waitlist, and update your registry account.',
+    wEmpty: 'Save programs in step 2 to track them here.', wCount: (n, all) => `${n} of ${all} on a waitlist`,
+    wOfferTip: 'Space secured? Apply for the fee subsidy within 2 business days, with your documents.', calDone: 'Calendar file downloaded. Open it to add the reminder.',
+    waitTitle: 'While you wait: 4 things that help', subTitle: 'Get your subsidy documents ready now', subKey: 'Once you secure a space, you have only 2 business days to apply and send your documents.',
+    subWho: 'Who can qualify (with financial need)', subDocs: 'What to have ready', subApply: 'How to apply (City)',
+    hintGot: 'Got it', hintShow: 'How this page works',
+    updTitle: 'How this stays up to date',
+    tourBack: 'Back', tourOf: (i, n) => `${i} of ${n}`,
   },
   fr: {
     skip: 'Aller au contenu', brandSub: 'Ottawa',
     copyLink: 'Copier le lien', linkCopied: 'Lien copié. Il ouvre directement ce programme.', searching: 'Recherche…',
     dataDate: (a, b) => `Données : données ouvertes de la Ville d’Ottawa (téléchargées le ${a}) et Santé publique Ottawa (${b}).`,
-    dlTitle: 'Télécharger les données jumelées', dlLead: 'Les 329 fournisseurs avec coordonnées, places agréées par âge et statut d’inspection de Santé publique Ottawa, dans un fichier CSV. Contient des renseignements visés par la Licence du gouvernement ouvert – Ville d’Ottawa; emplacements © contributeurs OpenStreetMap.', dlBtn: 'Télécharger le CSV',
+    dlTitle: 'Télécharger les données jumelées', dlLead: 'Les 329 fournisseurs avec coordonnées, places agréées par âge, statut d’inspection de Santé publique Ottawa et arrêt d’autobus et station de l’O-Train les plus proches, dans un fichier CSV. Contient des renseignements visés par la Licence du gouvernement ouvert – Ville d’Ottawa; emplacements © contributeurs OpenStreetMap.', dlBtn: 'Télécharger le CSV',
     ophSource: 'Santé publique Ottawa, inspections des services de garde',
     brandTag: 'Services de garde, étape par étape', footerInsights: 'Données pour la Ville',
     datesQ: 'Besoin plus tard, ou bébé pas encore né?', birthL: 'Date de naissance ou prévue', needL: 'Garde requise à partir du',
@@ -350,10 +396,10 @@ const I18N = {
     faqTitle: 'Questions et réponses', faqLead: 'Des réponses courtes aux questions fréquentes, avec la source officielle.', source: 'Source',
     aboutTitle: 'À propos des données', privacy: 'Confidentialité', limits: 'Limites', forCity: 'Pour la Ville d’Ottawa',
     tourNext: 'Suivant', tourSkip: 'Passer', tourGo: 'C’est parti!',
-    kipFind: 'Choisissez l’âge de votre enfant et votre secteur. Touchez un programme pour voir ses détails. Touchez Garder pour le conserver.',
+    kipFind: 'Chaque carte est un programme agréé. Touchez-en une pour voir ses places, ses inspections et comment s’y rendre. Touchez Garder pour l’étape 2.',
     kipShortlist: 'Gardez 5 à 9 programmes. Utilisez ↑ ↓ pour les classer. Comparez-les ou partagez la liste avec votre partenaire.',
     kipVisit: 'Lors d’une visite, posez d’abord les 10 questions essentielles. Tout reste sur cet appareil.',
-    kipApply: 'Inscrivez-vous à la liste de la Ville, ajoutez vos choix, puis connectez-vous tous les 60 jours.',
+    kipApply: 'Inscrivez-vous à la liste de la Ville, ajoutez vos choix, puis connectez-vous tous les 60 jours. Plus bas, suivez vos listes d’attente et préparez vos documents.',
     kipHome: 'Commencez par l’âge de votre enfant et votre code postal. KinderGuide vous guide, étape par étape.',
     kipServices: 'Tous les sites officiels, regroupés par tâche. Cherchez, ou lisez les questions fréquentes.',
     toastSaved: (n) => `Gardé. ${n} sur 9 dans votre liste.`, toastRemoved: 'Retiré de votre liste.', toastFull: 'Vous en avez déjà 9. Retirez-en un d’abord.',
@@ -361,13 +407,39 @@ const I18N = {
     nearX: x => `Près de ${x}`, yourLoc: 'votre position', km: 'km',
     footerAbout: 'À propos des données', footerTour: 'Visite guidée', footerP1: 'Prototype 1',
     lang: 'English',
+    transit: 'Pour s’y rendre', trainNear: (s, m) => `Station de l’O-Train ${s}, à ${m} m`, noTrain: 'Aucune station de l’O-Train ouverte à moins de 1 km',
+    stopsNear: n => `${n} arrêt${n > 1 ? 's' : ''} d’autobus à 5 minutes à pied (400 m)`, busFar: m => `Arrêt d’autobus le plus proche : ${m} m`,
+    transitDir: 'Itinéraire en transport en commun', transitNote: 'Emplacement des arrêts : OpenStreetMap. Distance à vol d’oiseau; vérifiez trajets et horaires auprès d’OC Transpo.',
+    nearTrain: 'Près d’une station de l’O-Train (1 km)', verifyLic: 'Vérifier le permis auprès de l’Ontario',
+    stale: d => `Ces données ont été téléchargées le ${d} et ont pu changer. Confirmez auprès du programme.`, checked: d => `vérifié le ${d}`,
+    wTitle: 'Suivre mes listes d’attente', wLead: 'Notez où vous en êtes avec chaque programme. Tout reste sur cet appareil.', wStatus: 'Statut', wAdded: 'Ajouté le', wContact: 'Dernier contact',
+    wNone: 'Pas encore ajouté', wWaiting: 'Sur la liste d’attente', wOffered: 'Place offerte', wAccepted: 'Acceptée', wDeclined: 'Refusée',
+    wRemind: 'Me le rappeler dans 3 mois', wRemindTitle: n => `Relancer ${n}`, wRemindDesc: 'Appelez ou écrivez pour vérifier que vous êtes toujours sur la liste, et mettez à jour votre compte au registre.',
+    wEmpty: 'Gardez des programmes à l’étape 2 pour les suivre ici.', wCount: (n, all) => `${n} sur ${all} sur une liste d’attente`,
+    wOfferTip: 'Place obtenue? Demandez la subvention dans les 2 jours ouvrables, avec vos documents.', calDone: 'Fichier de calendrier téléchargé. Ouvrez-le pour ajouter le rappel.',
+    waitTitle: 'En attendant : 4 choses qui aident', subTitle: 'Préparez dès maintenant vos documents de subvention', subKey: 'Une fois la place obtenue, vous n’avez que 2 jours ouvrables pour faire la demande et envoyer vos documents.',
+    subWho: 'Qui peut y avoir droit (selon le besoin financier)', subDocs: 'Quoi préparer', subApply: 'Comment faire la demande (Ville)',
+    hintGot: 'Compris', hintShow: 'Comment fonctionne cette page',
+    updTitle: 'Comment le site reste à jour',
+    tourBack: 'Retour', tourOf: (i, n) => `${i} sur ${n}`,
   },
 };
 
-// First-visit tour (4 steps, matching the 4-step journey)
+// First-visit tour: points at the real controls on the home page, one at a time.
+// target: CSS selectors tried in order; the first one visible on this screen is highlighted (phones use other buttons).
 const TOUR = [
-  { title: { en: 'Hi, I’m Kip!', fr: 'Bonjour, je suis Kip!' }, text: { en: 'Finding child care takes 4 steps. I’ll show you each one in 20 seconds.', fr: 'Trouver un service de garde se fait en 4 étapes. Je vous les montre en 20 secondes.' }, view: 'home' },
-  { title: { en: '1 · Find', fr: '1 · Trouver' }, text: { en: 'See only programs licensed for your child’s age, near home or on your way to work.', fr: 'Voyez seulement les programmes agréés pour l’âge de votre enfant, près de chez vous ou sur le chemin du travail.' }, view: 'find' },
-  { title: { en: '2 · Shortlist', fr: '2 · Ma liste' }, text: { en: 'Save 5 to 9, rank them, compare them, share them with your partner.', fr: 'Gardez-en 5 à 9, classez-les, comparez-les, partagez-les.' }, view: 'shortlist' },
-  { title: { en: '3 · Visit and 4 · Apply', fr: '3 · Visiter et 4 · S’inscrire' }, text: { en: 'Ask Ontario’s questions on visits, then follow your plan to apply on the City’s registry.', fr: 'Posez les questions de l’Ontario lors des visites, puis suivez votre plan pour vous inscrire au registre.' }, view: 'apply' },
+  { target: null, title: { en: 'Welcome to KinderGuide', fr: 'Bienvenue sur KinderGuide' },
+    text: { en: 'A guide to licensed child care in Ottawa, in 4 steps. No account and nothing to sign up for. Here is how it works, in 30 seconds.', fr: 'Un guide des services de garde agréés à Ottawa, en 4 étapes. Aucun compte, aucune inscription. Voici comment ça marche, en 30 secondes.' } },
+  { target: ['#ageChips'], title: { en: 'Start here: your child’s age', fr: 'Commencez ici : l’âge de votre enfant' },
+    text: { en: 'KinderGuide shows only programs licensed for that age. Baby not born yet, or care needed later? Open the dates option just below.', fr: 'KinderGuide montre seulement les programmes agréés pour cet âge. Bébé pas encore né, ou garde plus tard? Ouvrez l’option des dates juste en dessous.' } },
+  { target: ['.near-row'], title: { en: 'Then: where you live', fr: 'Ensuite : où vous habitez' },
+    text: { en: 'Type your postal code, or use your location. It is only used to place you on the map.', fr: 'Entrez votre code postal ou utilisez votre position. Ils servent seulement à vous placer sur la carte.' } },
+  { target: ['#stepper', '#bottomNav'], title: { en: 'Your 4 steps', fr: 'Vos 4 étapes' },
+    text: { en: 'Find, Shortlist, Visit, Apply. Go in order or jump to any step. A check mark shows each step you have done.', fr: 'Trouver, Ma liste, Visiter, S’inscrire. Suivez l’ordre ou allez à n’importe quelle étape. Un crochet montre chaque étape faite.' } },
+  { target: ['#svcBtn', '#bottomNav [data-view=services]'], title: { en: 'Every official website, in one place', fr: 'Tous les sites officiels, au même endroit' },
+    text: { en: 'The City’s waitlist, fee help, safety checks and more, grouped by what you need to do.', fr: 'La liste d’attente de la Ville, l’aide financière, la sécurité et plus, regroupés selon ce que vous devez faire.' } },
+  { target: ['#kipFab', '#helpTop'], title: { en: 'Need help? It is always here', fr: 'Besoin d’aide? Elle est toujours ici' },
+    text: { en: 'Tap Help on any page. Each step also shows a short tip the first time you open it.', fr: 'Touchez Aide sur n’importe quelle page. Chaque étape montre aussi un court conseil la première fois.' } },
 ];
+// Short tip shown at the top of each step the first time it is opened
+const PAGE_HINTS = { find: 'kipFind', shortlist: 'kipShortlist', visit: 'kipVisit', apply: 'kipApply', services: 'kipServices' };

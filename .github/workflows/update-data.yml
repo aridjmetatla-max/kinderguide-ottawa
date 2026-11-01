@@ -1,0 +1,38 @@
+# Weekly data update: downloads the City of Ottawa's open data and OpenStreetMap transit stops,
+# rebuilds the site's data, republishes the site if anything changed, then checks every official link.
+# Runs every Monday at 7:00 (Ottawa time); it can also be started by hand from the Actions tab.
+name: Weekly data update
+on:
+  schedule:
+    - cron: '0 11 * * 1'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency: data-update
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Download the City's file and OpenStreetMap transit stops
+        run: python tools/fetch_sources.py
+      - name: Rebuild the data (map new programs, keep ids stable)
+        run: |
+          python tools/extract.py
+          python tools/geocode.py
+          python tools/build_data.py
+          python tools/build_transit.py
+      - name: Publish if anything changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data tools/sources
+          if git diff --cached --quiet; then echo "No changes this week"; exit 0; fi
+          git commit -m "Weekly data update $(date -u +%F)"
+          git push origin HEAD:main
+          git push origin HEAD:gh-pages
+      - name: Check every official link (a broken link fails this step, and GitHub emails the owner)
+        run: python tools/check_links.py
