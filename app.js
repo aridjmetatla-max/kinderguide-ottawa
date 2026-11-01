@@ -59,7 +59,7 @@ const kmText = d => `${d < 10 ? d.toFixed(1).replace('.', state.lang === 'fr' ? 
 const dateText = d => new Date(d + 'T12:00:00').toLocaleDateString(state.lang === 'fr' ? 'fr-CA' : 'en-CA', { year: 'numeric', month: 'short', day: 'numeric' });
 
 let toastTimer;
-function toast(msg) { const el = $('toast'); el.textContent = msg; el.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 2600); }
+function toast(msg, ms = 2600) { const el = $('toast'); el.textContent = msg; el.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), ms); }
 async function copyText(text) {
   try { await navigator.clipboard.writeText(text); return true; }
   catch (e) { const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); let ok = false; try { ok = document.execCommand('copy'); } catch (e2) { /* ignore */ } ta.remove(); return ok; }
@@ -399,7 +399,7 @@ function renderPanelBody(p) {
     body.innerHTML = (p.kind === 'centre' ? `<div class="box"><h3>${ic('child')}${esc(t('spacesByAge'))}</h3><div class="bars">${AGES.map(a => `<div class="bar${state.age === a.key ? ' hi' : ''}"><span>${esc(tr(a.label))}</span><span class="track"><span class="fill" style="width:${p.spaces[a.key] ? Math.max(4, p.spaces[a.key] / max * 100) : 0}%"></span></span><span class="n">${p.spaces[a.key] || '–'}</span></div>`).join('')}</div>
         <p class="note"><b>${esc(t('licensedFor', p.capacity))}</b>: ${esc(t('spacesNote'))}</p></div>`
       : `<div class="box"><h3>${ic('home')}${esc(t('agency'))}</h3><p>${state.lang === 'fr' ? 'Garde dans la maison d’une éducatrice, supervisée par cette agence agréée. Contactez l’agence pour connaître les maisons près de chez vous.' : 'Care in a provider’s home, overseen by this licensed agency. Contact the agency to find homes near you.'}</p></div>`)
-      + transitBox(p) + costBox(p) + `<p class="note">${p.operator ? `${state.lang === 'fr' ? 'Exploitant' : 'Operator'}: ${esc(p.operator)} · ` : ''}${ext(SOURCES.licensing.url, t('verifyLic'), 'link')}</p>`;
+      + transitBox(p) + costBox(p) + `<p class="note">${p.operator ? `${state.lang === 'fr' ? 'Exploitant' : 'Operator'}: ${esc(p.operator)} · ` : ''}<button class="link" data-lic>${esc(t('verifyLic'))} ${ic('external', 'sm')}</button></p>`;
   } else if (ptab === 'safety') {
     const s = insp(p);
     let html = `<div class="box"><h3>${ic('shield')}${esc(t('inspTitle'))}</h3><p class="note" style="margin:0 0 10px">${esc(t('inspBy'))}</p>`;
@@ -410,9 +410,8 @@ function renderPanelBody(p) {
       if (s.r.issues.length) html += `<details class="more"><summary>${esc(t('inspIssues'))} (${s.r.issues.length})</summary><ul class="issues">${s.r.issues.map(i => `<li>${esc(i.t)} <span class="muted">· ${esc(dateText(i.d))}</span> ${i.c ? `<span class="crit">${esc(t('critical'))}</span>` : ''}</li>`).join('')}</ul></details>`;
     }
     html += `<p class="note">${esc(t('source'))}: ${esc(t('ophSource'))}, ${esc(dateText(INSPECTIONS_META.feed))}.</p></div>
-      <div class="box"><h3>${ic('file')}${esc(t('licReport'))}</h3><div style="display:flex;gap:8px;flex-wrap:wrap">${ext(SOURCES.licensing.url, t('verifyLic'), 'btn primary small')}<button class="btn ghost small" id="copyName">${esc(t('copyName'))}</button></div></div>`;
+      <div class="box"><h3>${ic('file')}${esc(t('licReport'))}</h3><button class="btn primary small" data-lic>${ic('clipboard', 'sm')}${esc(t('licBtn'))} ${ic('external', 'sm')}</button><p class="note">${esc(t('licHow'))}</p></div>`;
     body.innerHTML = html;
-    $('copyName').onclick = async () => toast((await copyText(p.name)) ? t('nameCopied') : p.name);
   } else if (ptab === 'reviews') {
     const q = encodeURIComponent(`${p.name} ${p.address} ${p.city} ON`);
     body.innerHTML = `<div class="box" id="gBox"><h3>${ic('star')}${esc(t('revLive'))}</h3><div id="gReviews">${CONFIG.GOOGLE_PLACES_KEY ? '…' : ''}</div>
@@ -430,6 +429,10 @@ function renderPanelBody(p) {
 }
 $('panel').addEventListener('click', e => {
   if (e.target.closest('#pClose')) { closePanel(); return; }
+  if (e.target.closest('[data-lic]')) {   // Ontario's search cannot be opened with a name filled in: copy the name, open the search, explain where to paste
+    const p = BY_ID[activeId]; window.open(SOURCES.licensing.url, '_blank', 'noopener');
+    copyText(p.name).then(ok => toast(ok ? t('nameCopied') : p.name, 9000)); return;
+  }
   if (e.target.closest('#copyLink')) { copyText(location.origin + location.pathname + '#p/' + activeId).then(ok => toast(ok ? t('linkCopied') : location.href)); return; }
   const tb = e.target.closest('[data-ptab]'); if (tb) { ptab = tb.dataset.ptab; openPanel(activeId); return; }
   const s = e.target.closest('[data-save]'); if (s) { toggleShortlist(s.dataset.save); openPanel(s.dataset.save); }
@@ -508,7 +511,7 @@ function renderShortlist() {
       <div class="mini"><button data-move="-1" aria-label="${esc(t('up'))}">${ic('up', 'sm')}</button><button data-move="1" aria-label="${esc(t('down'))}">${ic('down', 'sm')}</button><button data-remove="${id}" aria-label="${esc(t('remove'))}">${ic('x', 'sm')}</button></div>
     </article>`;
   }).join('')}</div>`;
-  $('slActions').innerHTML = `<button class="btn primary" id="shareBtn">${ic('link', 'sm')}${esc(t('share'))}</button><button class="btn ghost" id="copyReg">${ic('clipboard', 'sm')}${esc(t('copyReg'))}</button>${ext(SOURCES.registry.url, t('openReg'), 'btn ghost')}<button class="btn ghost" id="printBtn">${ic('printer', 'sm')}${esc(t('print'))}</button>`;
+  $('slActions').innerHTML = `<button class="btn primary" id="shareBtn">${ic('link', 'sm')}${esc(t('share'))}</button><button class="btn ghost" id="copyReg">${ic('clipboard', 'sm')}${esc(t('copyReg'))}</button>${ext(SOURCES.registryApp.url, t('openReg'), 'btn ghost')}<button class="btn ghost" id="printBtn">${ic('printer', 'sm')}${esc(t('print'))}</button>`;
   nextBar('nextShortlist', 'find', 'visit', t('step3'));
 }
 function renderCompare() {
@@ -604,7 +607,7 @@ const monthly = (perDay, days) => Math.round(perDay * days * 52 / 12);
 function renderApply() {
   const list = state.shortlist.map((id, i) => `${i + 1}. ${BY_ID[id].name}`).join('\n');
   const tasks = [
-    { n: 1, h: t('task1'), d: t('task1d'), act: ext(SOURCES.registry.url, t('openReg'), 'btn primary small') },
+    { n: 1, h: t('task1'), d: t('task1d'), act: ext(SOURCES.registryApp.url, t('openReg'), 'btn primary small') + ext(SOURCES.registry.url, t('howReg'), 'btn ghost small') },
     { n: 2, h: t('task2'), d: t('task2d'), act: state.shortlist.length ? `<button class="btn ghost small" id="copyReg2">${ic('clipboard', 'sm')}${esc(t('copyReg'))}</button>` : `<button class="btn ghost small" data-view="find">${esc(t('goFind'))}</button>`, extra: list ? `<pre>${esc(list)}</pre>` : '' },
     { n: 3, h: t('task3'), d: t('task3d'), act: `<button class="btn ghost small" id="icsBtn">${ic('bell', 'sm')}${esc(t('reminders'))}</button>` },
     { n: 4, h: t('task4'), d: t('task4d'), act: ext(SOURCES.subsidy.url, t('calc')),
@@ -695,8 +698,8 @@ $('view-apply').addEventListener('click', async e => {
   if (ch) { const k = ch.closest('[data-est]').dataset.est; state[k] = k === 'estDays' ? +ch.dataset.v : ch.dataset.v; save(); renderEstimator(); return; }
   if (e.target.closest('#copyReg2')) { const txt = state.shortlist.map((x, i) => `${i + 1}. ${BY_ID[x].name} (${BY_ID[x].address}, ${BY_ID[x].city})`).join('\n'); toast((await copyText(txt)) ? t('copied') : txt); return; }
   if (e.target.closest('#icsBtn')) {
-    const d = new Date(); d.setDate(d.getDate() + 55);
-    downloadIcs('child-care-registry-reminders.ics', [{ date: d, rrule: 'RRULE:FREQ=DAILY;INTERVAL=55;COUNT=12', title: state.lang === 'fr' ? 'Se connecter au registre des services de garde' : 'Log in to the City child care registry', desc: `${t('task3d')} ${SOURCES.registry.url}` }]);
+    const d = new Date(); d.setMonth(d.getMonth() + 2);   // every 2 months: our suggestion, not a City rule
+    downloadIcs('child-care-registry-reminders.ics', [{ date: d, rrule: 'RRULE:FREQ=MONTHLY;INTERVAL=2;COUNT=12', title: state.lang === 'fr' ? 'Mettre à jour ma demande au registre des services de garde' : 'Update my City child care registry application', desc: `${t('task3d')} ${SOURCES.registryApp.url}` }]);
     toast(state.lang === 'fr' ? 'Fichier de calendrier téléchargé.' : 'Calendar file downloaded. Open it to add reminders.');
   }
 });
@@ -739,7 +742,7 @@ function renderAbout() {
       <li>${fr ? 'Les distances sont à vol d’oiseau, pas des temps de trajet.' : 'Distances are straight-line, not travel times.'}</li>
       <li>${fr ? `Fichier de la Ville mis à jour le ${esc(dateText(DATA_META.cityUpdated))} (date du portail); la Ville prépare une nouvelle version.` : `City file last updated ${esc(dateText(DATA_META.cityUpdated))} (portal date); the City is preparing a new version.`}</li></ul></div>
     <div class="glass card-pad wide"><h3>${ic('refresh')}${esc(t('updTitle'))}</h3><ul class="ilist dots">
-      <li>${fr ? 'Chaque semaine, une tâche automatique télécharge le fichier de la Ville, place les nouveaux programmes sur la carte, vérifie tous les liens officiels et republie le site.' : 'Every week, an automatic job downloads the City’s file, maps any new programs, checks every official link and republishes the site.'}</li>
+      <li>${fr ? 'Chaque semaine, une tâche automatique télécharge le fichier de la Ville, place les nouveaux programmes sur la carte, vérifie les liens officiels et republie le site. Les pages de la Ville d’Ottawa bloquent les outils automatiques : l’équipe les vérifie à la main.' : 'Every week, an automatic job downloads the City’s file, maps any new programs, checks the official links and republishes the site. City of Ottawa pages block automated tools, so the team checks those by hand.'}</li>
       <li>${fr ? 'Chaque réponse montre sa source officielle et la date de vérification.' : 'Each answer shows its official source and the date it was checked.'}</li>
       <li>${fr ? 'Chaque programme a un lien vers la recherche de l’Ontario pour confirmer son permis.' : 'Each program links to Ontario’s licensing search, to confirm its licence.'}</li>
       <li>${fr ? `Si les données ont plus de ${STALE_DAYS} jours, le site l’indique aux parents.` : `If the data is more than ${STALE_DAYS} days old, the site tells parents.`}</li>
