@@ -19,7 +19,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<link rel="stylesheet" href="styles.css?v=42">
+<link rel="stylesheet" href="styles.css?v=46">
 </head>
 <body>
 <a class="skip" href="#main" data-i18n="skip">Skip to content</a>
@@ -43,6 +43,7 @@
   <section class="view" id="view-home" aria-labelledby="homeTitle">
     <div class="hero">
       <div class="hero-text">
+        <div class="welcome glass" id="welcome" hidden></div>
         <h1 id="homeTitle" data-i18n="heroTitle">Find child care in Ottawa, in 4 clear steps.</h1>
         <p class="lead" data-i18n="heroLead"></p>
         <form class="quick glass" id="quick">
@@ -81,6 +82,7 @@
       <button class="btn ghost" id="filterBtn" aria-expanded="false" aria-controls="filterPop"><span class="ico-slot" data-ic="filter"></span><span data-i18n="filters">Filters</span> <b class="fcount" id="fCount" hidden></b></button>
       <div class="pop glass" id="filterPop" hidden></div>
     </div>
+    <div class="seg mswitch" id="mSwitch" role="group" aria-label="List or map"></div>
     <div class="find">
       <div class="list-col">
         <div class="list-head"><span id="resultCount" aria-live="polite"></span><button class="link" id="kipFind" data-kip="find"><span data-i18n="help">Help</span></button></div>
@@ -90,7 +92,6 @@
       <div class="map-col glass"><div id="map" role="region" aria-label="Map of licensed child care"></div>
         <div class="legend" id="legend"></div></div>
     </div>
-    <div class="next-bar" id="nextFind"></div>
   </section>
 
   <!-- 2 SHORTLIST -->
@@ -101,36 +102,33 @@
     <div class="slots glass" id="slProgress"></div>
     <div id="slBody"></div>
     <div class="actions" id="slActions"></div>
-    <div class="next-bar" id="nextShortlist"></div>
   </section>
 
   <!-- 3 VISIT -->
   <section class="view" id="view-visit" aria-labelledby="vTitle">
-    <div class="page-head"><div><p class="eyebrow" id="vEyebrow"></p><h1 id="vTitle" data-i18n="vTitle"></h1><p data-i18n="vLead"></p></div>
-      <div class="seg" id="clMode" role="group"></div></div>
-    <div class="chips scroller" id="clFor" role="group"></div>
+    <div class="page-head"><div><p class="eyebrow" id="vEyebrow"></p><h1 id="vTitle" data-i18n="vTitle"></h1><p id="vLeadTxt"></p></div></div>
+    <ol class="vhow" id="vHow"></ol>
+    <div class="chips scroller clfor" id="clFor" role="group"></div>
     <div class="visit-grid">
       <div id="clGroups"></div>
       <aside class="visit-side">
         <div class="glass card-pad" id="clScore"></div>
-        <div class="glass card-pad" id="clRatio"></div>
-        <div class="glass card-pad"><h3 data-i18n="lookFor"></h3><ul class="ticks" id="lookFor"></ul></div>
         <div class="glass card-pad" id="visitCal"></div>
+        <details class="glass card-pad side-more"><summary id="vWatchT"></summary><ul class="ticks" id="lookFor"></ul><div id="clRatio"></div></details>
       </aside>
     </div>
-    <div class="next-bar" id="nextVisit"></div>
   </section>
 
   <!-- 4 APPLY -->
   <section class="view" id="view-apply" aria-labelledby="aTitle">
-    <div class="page-head"><div><p class="eyebrow" id="aEyebrow"></p><h1 id="aTitle" data-i18n="aTitle"></h1><p data-i18n="aLead"></p></div>
+    <div class="page-head"><div><p class="eyebrow" id="aEyebrow"></p><h1 id="aTitle" data-i18n="aTitle"></h1><p id="aLeadTxt"></p></div>
       <div class="ring" id="planRing"></div></div>
+    <div class="phases" id="aPhases" role="tablist"></div>
     <div class="apply-grid">
-      <ol class="tasks" id="tasks"></ol>
-      <aside class="apply-side"><div class="glass card-pad" id="timeline"></div><div class="glass card-pad est" id="estimator"></div>
+      <div><ol class="tasks" id="tasks"></ol><section class="glass card-pad wl" id="waitlist" aria-labelledby="wlTitle"></section><div id="aFoot"></div></div>
+      <aside class="apply-side"><div class="glass card-pad" id="cheat"></div><div class="glass card-pad" id="timeline"></div><div class="glass card-pad est" id="estimator"></div>
         <button class="btn primary big wide" id="printPlan"><span class="ico-slot" data-ic="printer"></span><span data-i18n="printPlan">Print my child care plan</span></button></aside>
     </div>
-    <section class="glass card-pad wl" id="waitlist" aria-labelledby="wlTitle"></section>
   </section>
 
   <!-- SERVICES HUB -->
@@ -158,6 +156,9 @@
   <span>KinderGuide Ottawa · SED3111 · <span data-i18n="trust"></span></span>
   <span class="foot-links"><button class="link" data-view="about" data-i18n="footerAbout"></button> · <button class="link" data-view="insights" data-i18n="footerInsights"></button> · <button class="link" id="tourAgain" data-i18n="footerTour"></button> · <a class="link" href="prototype-1/" data-i18n="footerP1"></a></span>
 </footer>
+
+<!-- Next-step bar (each step) -->
+<div class="dock glass" id="dock" hidden></div>
 
 <!-- Mobile bottom navigation -->
 <nav class="bottom glass" id="bottomNav" aria-label="Steps (mobile)"></nav>
@@ -191,16 +192,19 @@
   </div>
 </div>
 
+<!-- Visit mode: one question at a time, full screen -->
+<div class="vmode" id="vmode" hidden role="dialog" aria-modal="true" aria-labelledby="vmQ"></div>
+
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <section id="planPrint" aria-hidden="true"></section>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script src="config.js?v=42"></script>
-<script src="icons.js?v=42"></script>
-<script src="data/providers.js?v=42"></script>
-<script src="data/inspections.js?v=42"></script>
-<script src="data/transit.js?v=42"></script>
-<script src="content.js?v=42"></script>
-<script src="app.js?v=42"></script>
+<script src="config.js?v=46"></script>
+<script src="icons.js?v=46"></script>
+<script src="data/providers.js?v=46"></script>
+<script src="data/inspections.js?v=46"></script>
+<script src="data/transit.js?v=46"></script>
+<script src="content.js?v=46"></script>
+<script src="app.js?v=46"></script>
 </body>
 </html>

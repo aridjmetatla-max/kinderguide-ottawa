@@ -98,8 +98,7 @@ let current = 'home';
 function stepDone(s) {
   if (s === 'find') return !!state.home || state.shortlist.length > 0;
   if (s === 'shortlist') return state.shortlist.length >= MIN_PICKS;
-  if (s === 'visit') return Object.values(state.visited).some(Boolean) || Object.keys(state.answers).some(k => Object.values(state.answers[k] || {}).some(Boolean));
-  if (s === 'apply') return [1, 2, 3, 4].every(i => state.tasks[i]);
+  if (s === 'visit' || s === 'apply') return stepStatus(s).k === 'stDone';   // same rule as the status on the home page
   return false;
 }
 function renderStepper() {
@@ -117,7 +116,7 @@ function go(view, { scroll = true } = {}) {
   if (scroll) window.scrollTo({ top: 0 });
   closePanel(); hideKip();
   ({ home: renderHome, find: renderFind, shortlist: renderShortlist, visit: renderVisit, apply: renderApply, services: renderServices, about: renderAbout, insights: renderInsights })[view]();
-  renderStepper(); showHint(view);
+  renderStepper(); renderDock(); showHint(view);
   if (view === 'find') setTimeout(() => { if (map) { map.invalidateSize(); renderMap(lastList); } }, 120);
   const idx = STEPS.indexOf(view);
   ['slEyebrow', 'vEyebrow', 'aEyebrow'].forEach(id => { const n = { slEyebrow: 2, vEyebrow: 3, aEyebrow: 4 }[id]; $(id).textContent = `${state.lang === 'fr' ? 'Étape' : 'Step'} ${n} ${state.lang === 'fr' ? 'sur' : 'of'} 4`; });
@@ -128,8 +127,20 @@ document.addEventListener('click', e => {
   if (b) { e.preventDefault(); go(b.dataset.view); }
 });
 window.addEventListener('hashchange', () => { const v = location.hash.slice(1); if (v.startsWith('p/')) { if (BY_ID[v.slice(2)] && activeId !== v.slice(2)) { if (current !== 'find') go('find'); openPanel(v.slice(2)); } return; } if (v && v !== current) go(v); });
-function nextBar(id, back, next, label) {
-  $(id).innerHTML = `${back ? `<button class="btn ghost" data-view="${back}">${ic('back', 'sm')}${esc(t('back'))}</button>` : ''}${next ? `<button class="btn primary" data-view="${next}">${esc(t('next'))}: ${esc(label)}${ic('arrow', 'sm')}</button>` : ''}`;
+// Next-step bar, fixed at the bottom of each step: what you have done so far and a button named after the next step
+function renderDock() {
+  const n = state.shortlist.length, d = $('dock');
+  const info = (icon, b, small) => `<div class="dock-info"><span class="dock-ic">${icon}</span><span><b>${esc(b)}</b><small>${esc(small)}</small></span></div>`;
+  const btn = (view, label, cls = 'primary', back) => `<button class="btn ${cls}" data-view="${view}">${back ? ic('back', 'sm') : ''}${esc(label)}${back ? '' : ic('arrow', 'sm')}</button>`;
+  const slots = `<span class="dock-slots" aria-hidden="true">${Array.from({ length: MAX_PICKS }, (_, i) => `<i class="${i < n ? 'full' : ''}"></i>`).join('')}</span>`;
+  let html = '';
+  if (current === 'find') html = n ? info(slots, t('dockSaved', n), t('dockSavedS', n)) + btn('shortlist', t('dockToShortlist', n))
+    : info(ic('heart'), t('dockFind0'), t('dockFind0s'));
+  else if (current === 'shortlist') html = n ? info(slots, t('dockSl', n), t('dockSlS')) + `<div class="dock-btns">${btn('find', t('dockMore'), 'ghost', true)}${btn('visit', t('dockToVisit'))}</div>`
+    : info(ic('heart'), t('dockSl0'), t('dockSl0s')) + btn('find', t('dockFind'));
+  else if (current === 'visit') { const v = visitCount(); html = info(ic('clipboard'), t('dockVisit', v.a, v.n), t('dockVisitS')) + `<div class="dock-btns">${btn('shortlist', t('step2'), 'ghost', true)}${btn('apply', t('dockToApply'))}</div>`; }
+  else if (current === 'apply') html = info(ic('file'), t('dockApply'), t('dockApplyS')) + btn('visit', t('dockBackVisit'), 'ghost', true);
+  d.innerHTML = html; d.hidden = !html; document.body.classList.toggle('has-dock', !!html);
 }
 
 /* ---------- 3. Home ---------- */
@@ -192,6 +203,13 @@ function applyDates() {
 }
 ['birthInput', 'needInput'].forEach(id => $(id).addEventListener('change', () => { state.birth = $('birthInput').value || null; state.need = $('needInput').value || null; applyDates(); }));
 const STEP_COLORS = ['var(--teal)', 'var(--teal)', 'var(--teal)', 'var(--teal)'];
+function stepStatus(s) {
+  const n = state.shortlist.length;
+  if (s === 'find') return stepDone('find') ? { k: 'stDone' } : { k: 'stStart' };
+  if (s === 'shortlist') return !n ? { k: 'stNot' } : { k: n >= MIN_PICKS ? 'stDone' : 'stProg', d: t('stSaved', n) };
+  if (s === 'visit') { const c = state.shortlist.filter(id => Object.values(state.answers[id] || {}).some(Boolean)).length; return !c ? { k: 'stNot' } : { k: n && c >= n ? 'stDone' : 'stProg', d: t('stChecked', c) }; }
+  const reg = ['g1', 'g2', 'g3', 'g4', 'g5', 'g6', 'g7', 'g8'], d = reg.filter(k => (state.ap || {})[k]).length; return !d ? { k: 'stNot' } : { k: d === reg.length ? 'stDone' : 'stProg', d: t('stTasks', d) };
+}
 function renderHome() {
   renderAgeChips($('ageChips'));
   $('postalInput').placeholder = t('postal');
@@ -200,7 +218,12 @@ function renderHome() {
   $('birthInput').value = state.birth || ''; $('needInput').value = state.need || '';
   if (state.birth) { $('datesBox').open = true; applyDates(); }
   const icons4 = ['search', 'heart', 'clipboard', 'file'];
-  $('steps4').innerHTML = STEPS.map((s, i) => `<button class="s4 glass" data-view="${s}"><span class="n">${ic(icons4[i])}<i>${i + 1}</i></span><b>${esc(t('step' + (i + 1)))}</b><span>${esc(t('s' + (i + 1) + 'sub'))}</span></button>`).join('');
+  // Each step shows where the parent is (GOV.UK task list statuses); a returning parent gets one "Continue" button
+  const st = STEPS.map(stepStatus), nextI = st.findIndex(x => x.k !== 'stDone'), back = st.some(x => x.k !== 'stNot' && x.k !== 'stStart');
+  $('steps4').innerHTML = STEPS.map((s, i) => `<button class="s4 glass${i === nextI && back ? ' next' : ''}" data-view="${s}"><span class="n">${ic(icons4[i])}<i>${i + 1}</i></span><b>${esc(t('step' + (i + 1)))}</b><span>${esc(t('s' + (i + 1) + 'sub'))}</span>
+    <em class="st ${st[i].k}">${st[i].k === 'stDone' ? ic('check', 'sm') : ''}${esc(t(st[i].k))}${st[i].d ? ' · ' + esc(st[i].d) : ''}</em></button>`).join('');
+  $('welcome').hidden = !back;
+  $('welcome').innerHTML = back ? `<div><b>${esc(t('wbTitle'))}</b><span>${esc(t('wbLead'))}</span></div><button class="btn primary" data-view="${STEPS[nextI < 0 ? 3 : nextI]}">${esc(t('wbGo', t('nextLbl')[STEPS[nextI < 0 ? 3 : nextI]]))}${ic('arrow', 'sm')}</button>` : '';
   const spaces = CENTRES.reduce((s, p) => s + p.capacity, 0);
   $('stats').innerHTML = `<div><b>${fmt(PROVIDERS.length)}</b><span>${esc(t('statPrograms'))}</span></div><div><b>${fmt(spaces)}</b><span>${esc(t('statSpaces'))}</span></div><div><b>${fmt(Object.keys(INSPECTIONS).length)}</b><span>${esc(t('statInspected'))}</span></div>`;
   $('svcRow').innerHTML = SERVICES.filter(s => s.top).map(serviceCard).join('');
@@ -284,7 +307,10 @@ function sortedList() {
 }
 function ageTags(p) {
   if (p.kind === 'home') return `<span class="tag home">${esc(t('agency'))}</span>`;
-  return AGES.filter(a => p.spaces[a.key] > 0).map(a => `<span class="tag${state.age === a.key ? ' match' : ''}">${esc(tr(a.label))}</span>`).join('');
+  const ages = AGES.filter(a => p.spaces[a.key] > 0);
+  if (state.age === 'any') return ages.map(a => `<span class="tag">${esc(tr(a.label))}</span>`).join('');
+  const others = ages.filter(a => a.key !== state.age).length;   // "why it matches": the spaces for your child's age first
+  return `<span class="tag match">${ic('check', 'sm')}${esc(t('spacesFor', p.spaces[state.age], tr(AGE[state.age].label).toLowerCase()))}</span>${others ? `<span class="tag soft" title="${esc(ages.map(a => tr(a.label)).join(', '))}">${esc(t('moreAges', others))}</span>` : ''}`;
 }
 const trainOf = p => p.kind === 'centre' && TRANSIT[p.id] && TRANSIT[p.id].train ? TRANSIT[p.id] : null;
 const extraTags = p => (p.french ? `<span class="tag fr">FR</span>` : '') + (p.indigenous ? `<span class="tag ind">${esc(t('indigenous'))}</span>` : '')
@@ -294,11 +320,17 @@ function distText(p) {
   return state.home ? kmText(km(state.home, p)) + (p.approx ? ' ~' : '') : '';
 }
 function heartBtn(id) { const on = state.shortlist.includes(id); return `<button class="heart${on ? ' on' : ''}" data-save="${id}" aria-pressed="${on}">${ic('heart', 'sm')}${esc(on ? t('saved') : t('save'))}</button>`; }
-function renderFind() { renderFindControls(); renderList(); nextBar('nextFind', null, 'shortlist', `${t('step2')} (${state.shortlist.length})`); }
+function renderFind() {
+  renderFindControls(); renderList();
+  const m = document.body.classList.contains('m-map');
+  $('mSwitch').innerHTML = [['list', 'list', t('mList')], ['map', 'map', t('mMap')]].map(([k, icon, l]) => `<button type="button" data-msw="${k}" class="${(k === 'map') === m ? 'on' : ''}" aria-pressed="${(k === 'map') === m}">${ic(icon, 'sm')}${esc(l)}</button>`).join('');
+}
+// Phones: list or map, one at a time (the map gets the whole screen)
+$('mSwitch').addEventListener('click', e => { const b = e.target.closest('[data-msw]'); if (!b) return; document.body.classList.toggle('m-map', b.dataset.msw === 'map'); renderFind(); setTimeout(() => { if (map) { map.invalidateSize(); renderMap(lastList); } }, 200); });
 let lastList = [];
 function renderList() {
   const list = lastList = sortedList();
-  $('resultCount').textContent = t('results', list.length);
+  renderStory(list);
   renderTip(list);
   $('results').innerHTML = list.length ? list.slice(0, 160).map(p => `<article class="pc glass${p.id === activeId ? ' active' : ''}" data-id="${p.id}" tabindex="0" aria-label="${esc(p.name)}">
       <div class="pc-top"><div><h3>${esc(p.name)}</h3><div class="where">${esc(p.address)}${distText(p) ? ' · <b>' + esc(distText(p)) + '</b>' : ''}</div></div>${heartBtn(p.id)}</div>
@@ -308,25 +340,73 @@ function renderList() {
   $('results').insertAdjacentHTML('beforeend', `<p class="data-date${stale ? ' stale' : ''}">${ic(stale ? 'alert' : 'info', 'sm')}${esc(stale ? t('stale', dateText(DATA_META.downloaded)) : t('dataDate', dateText(DATA_META.downloaded), dateText(INSPECTIONS_META.feed)))} <button class="link" data-view="about">${esc(t('footerAbout'))}</button></p>`);
   renderMap(list);
 }
-function countAt(r) { const keep = state.radius; state.radius = r; const n = PROVIDERS.filter(matches).length; state.radius = keep; return n; }
+// What is typical in Ottawa: licensed spaces for this age within the same radius of each named area, median
+const cityCache = {};
+function cityMedian(age, r) {
+  const k = age + r; if (k in cityCache) return cityCache[k];
+  const v = AREAS.map(a => CENTRES.filter(p => km(a, p) <= r).reduce((n, p) => n + (age ? p.spaces[age] || 0 : p.capacity), 0)).sort((x, y) => x - y);
+  return (cityCache[k] = v[Math.floor(v.length / 2)]);
+}
+// The results told as a short story: how many, how many spaces for your child's age, how many passed inspection, how many near the O-Train
+function renderStory(list) {
+  const age = state.age !== 'any' ? state.age : null, ageWord = age ? t('storyAge')[age] : '';
+  const lbl = state.home ? (state.home.label === 'GPS' ? t('yourLoc') : state.home.label) : '';
+  const where = routeOn() ? t('storyRoute') : state.home && state.radius > 0 ? t('storyWithin', state.radius, lbl) : state.home ? t('storyCity') : t('storyCity');
+  const centres = list.filter(p => p.kind === 'centre');
+  const spaces = centres.reduce((n, p) => n + (age ? p.spaces[age] || 0 : p.capacity), 0);
+  const ok = list.filter(p => insp(p).kind === 'ok').length, train = centres.filter(p => trainOf(p)).length;
+  const med = state.home && !routeOn() && state.radius > 0 && !state.query ? cityMedian(age, state.radius) : null;   // compare only like with like: same circle, no name search
+  const band = med ? [spaces < med * .7 ? 'bandLow' : spaces > med * 1.3 ? 'bandHigh' : 'bandMid', med] : null;
+  const chips = [['french', 'french'], ['indigenous', 'indigenous'], ['okOnly', 'okOnly'], ['trainOnly', 'nearTrain']].filter(([k]) => state[k])
+    .concat(!state.agencies ? [['agencies', 'homeAg', true]] : []).concat(state.query ? [['query', null]] : []);
+  $('resultCount').innerHTML = `<p class="story"><b>${esc(t('storyN', list.length))}</b> ${age ? esc(t('storyFor', ageWord)) + ' ' : ''}${esc(where)}</p>
+    ${list.length ? `<div class="story-nums"><span><b>${fmt(spaces)}</b>${esc(t('stSpaces', ageWord))}${band ? ` <em class="band ${band[0]}" title="${esc(t('cmpCity', fmt(band[1])) + '. ' + t('cityNote'))}">${esc(t(band[0]))}</em>` : ''}</span><span><b>${fmt(ok)}</b>${esc(t('stOk'))}</span><span><b>${fmt(train)}</b>${esc(t('stTrain'))}</span></div>` : ''}
+    ${age && list.length && !spaces ? `<p class="story-none">${ic('alert', 'sm')}${esc(t('stNone', ageWord))}</p>` : ''}
+    ${chips.length ? `<div class="fchips">${chips.length > 1 ? `<button class="fchip clear" data-unf="all">${esc(t('clearAll'))}</button>` : ''}${chips.map(([k, l, neg]) => `<button class="fchip" data-unf="${k}" aria-label="${esc(t('chipClear'))}: ${esc(l ? t(l) : state.query)}">${neg ? '− ' : ''}${esc(l ? t(l) : '“' + state.query + '”')}${ic('x', 'sm')}</button>`).join('')}</div>` : ''}`;
+}
+$('resultCount').addEventListener('click', e => {
+  const b = e.target.closest('[data-unf]'); if (!b) return;
+  const k = b.dataset.unf; if (k === 'all') Object.assign(state, { query: '', agencies: true, french: false, indigenous: false, okOnly: false, trainOnly: false }); else if (k === 'query') state.query = ''; else if (k === 'agencies') state.agencies = true; else state[k] = false;
+  save(); renderFind();
+});
+// List and map point at each other: hovering a card grows its dot, hovering a dot outlines its card
+let hoverId = null;
+function hoverOn(id) {
+  if (hoverId === id) return;
+  const prev = hoverId; hoverId = id;
+  [prev, id].forEach(x => { if (x && markers[x]) { markers[x].setStyle(markerStyle(BY_ID[x])); if (x === id) markers[x].bringToFront(); } });
+  document.querySelectorAll('.pc.hover').forEach(c => c.classList.remove('hover'));
+  if (id) { const c = document.querySelector(`.pc[data-id="${id}"]`); if (c) c.classList.add('hover'); }
+}
+$('results').addEventListener('mouseover', e => { const c = e.target.closest('.pc'); hoverOn(c ? c.dataset.id : null); });
+$('results').addEventListener('mouseleave', () => hoverOn(null));
 function renderTip(list) {
   let html = '';
   const si = startInfo();
   if (si && state.age === si.group) html += `<div class="tip info">${ic('calendar', 'sm')}<span>${esc(t('ageAtStart', tr(AGE[si.group].label).toLowerCase(), dateText(si.when)))}</span></div>`;
-  if (state.home && !routeOn() && state.radius > 0 && list.length < MIN_PICKS) {
-    const next = [5, 10, 0].find(r => (r === 0 || r > state.radius) && countAt(r) >= MIN_PICKS);
-    html += `<div class="tip warn">${ic('info', 'sm')}<span>${esc(t('tipFew', list.length, '', state.radius))}</span>${next !== undefined ? `<button class="btn small primary" data-r="${next}">${esc(next ? t('tipWiden', next, countAt(next)) : t('tipAll', countAt(0)))}</button>` : ''}</div>`;
+  if (list.length < MIN_PICKS) {   // few results: show every way out, each with how many programs it would give
+    const opts = [];
+    if (state.home && !routeOn() && state.radius > 0) { const next = [5, 10, 0].find(r => (r === 0 || r > state.radius) && countWith({ radius: r }) > list.length); if (next !== undefined) opts.push([`data-r="${next}"`, next ? t('tipWiden', next, countWith({ radius: next })) : t('tipAll', countWith({ radius: 0 }))]); }
+    [['french', 'french'], ['indigenous', 'indigenous'], ['okOnly', 'okOnly'], ['trainOnly', 'nearTrain']].filter(([k]) => state[k]).forEach(([k, l]) => { const n = countWith({ [k]: false }); if (n > list.length) opts.push([`data-unf="${k}"`, t('tipWithout', t(l), n)]); });
+    if (state.query) { const n = countWith({ query: '' }); if (n > list.length) opts.push([`data-unf="query"`, t('tipWithout', state.query, n)]); }
+    if (state.age !== 'any') { const n = countWith({ age: 'any' }); if (n > list.length) opts.push([`data-anyage="1"`, t('tipNoAge', n)]); }
+    if (opts.length) html += `<div class="tip warn">${ic('info', 'sm')}<span>${esc(list.length ? t('tipFew', list.length, '', state.radius || '–') : t('noResults'))}</span><div class="tip-opts">${opts.slice(0, 3).map(([a, l], i) => `<button class="btn small ${i ? 'ghost' : 'primary'}" ${a}>${esc(l)}</button>`).join('')}</div></div>`;
   }
   $('tipBox').innerHTML = html;
 }
-$('tipBox').addEventListener('click', e => { const r = e.target.closest('[data-r]'); if (r) { state.radius = +r.dataset.r; save(); renderFind(); } });
+$('tipBox').addEventListener('click', e => {
+  const r = e.target.closest('[data-r]'); if (r) { state.radius = +r.dataset.r; save(); renderFind(); return; }
+  const u = e.target.closest('[data-unf]'); if (u) { if (u.dataset.unf === 'query') state.query = ''; else state[u.dataset.unf] = false; save(); renderFind(); return; }
+  if (e.target.closest('[data-anyage]')) { state.age = 'any'; save(); renderFind(); }
+});
+function countWith(patch) { const keep = {}; Object.keys(patch).forEach(k => { keep[k] = state[k]; state[k] = patch[k]; }); const n = PROVIDERS.filter(matches).length; Object.assign(state, keep); return n; }
 $('results').addEventListener('click', e => {
   const s = e.target.closest('[data-save]'); if (s) { e.stopPropagation(); toggleShortlist(s.dataset.save); return; }
   const c = e.target.closest('.pc'); if (c) openPanel(c.dataset.id);
 });
 $('results').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.classList.contains('pc')) openPanel(e.target.dataset.id); });
 function markerStyle(p) {
-  return { radius: p.id === activeId ? 10 : 7, weight: 2, color: '#fff', fillOpacity: .95,
+  return { radius: p.id === activeId || p.id === hoverId ? 11 : 7, weight: p.id === hoverId ? 3 : 2, color: '#fff', fillOpacity: .95,
     fillColor: state.shortlist.includes(p.id) ? COLORS.saved : p.kind === 'home' ? COLORS.home : COLORS.centre };
 }
 function initMap() {
@@ -334,7 +414,7 @@ function initMap() {
   map = window.L.map('map', { zoomControl: true }).setView([45.38, -75.72], 11);
   window.L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' }).addTo(map);
   markerLayer = window.L.layerGroup().addTo(map);
-  PROVIDERS.forEach(p => { markers[p.id] = window.L.circleMarker([p.lat, p.lon], markerStyle(p)).bindTooltip(esc(p.name), { direction: 'top', offset: [0, -6] }).on('click', () => openPanel(p.id)); });
+  PROVIDERS.forEach(p => { markers[p.id] = window.L.circleMarker([p.lat, p.lon], markerStyle(p)).bindTooltip(esc(p.name), { direction: 'top', offset: [0, -6] }).on('click', () => openPanel(p.id)).on('mouseover', () => hoverOn(p.id)).on('mouseout', () => hoverOn(null)); });
 }
 const pinIcon = name => window.L.divIcon({ className: 'map-pin', html: `<span>${ic(name)}</span>`, iconSize: [34, 34], iconAnchor: [17, 34] });
 function renderMap(list) {
@@ -355,78 +435,103 @@ function renderMap(list) {
 }
 
 /* ---------- 5. Details panel ---------- */
-let ptab = 'overview';
-function openPanel(id, tab) {
+// Summary first (save, 4 key facts, the data limit), everything else in sections that open on click
+const PSECS = [['spaces', 'child'], ['safety', 'shield'], ['transit', 'bus'], ['cost', 'dollar'], ['reviews', 'star'], ['ask', 'question']];
+function openPanel(id, sec) {
   const p = BY_ID[id]; if (!p) return;
-  activeId = id; if (tab) ptab = tab;
+  const keep = activeId === id && $('panel').classList.contains('open') ? [...document.querySelectorAll('#panel details[open]')].map(d => d.dataset.sec) : [];
+  activeId = id;
   history.replaceState(null, '', location.pathname + location.search + '#p/' + id);
-  const q = encodeURIComponent(`${p.name} ${p.address} ${p.city} ON`);
+  const q = encodeURIComponent(`${p.name} ${p.address} ${p.city} ON`), on = state.shortlist.includes(id);
+  const secs = PSECS.filter(([k]) => k !== 'spaces' || p.kind === 'centre').filter(([k]) => k !== 'transit' || (TRANSIT[p.id] && p.kind === 'centre'));
   $('panel').innerHTML = `
     <div class="p-head">
       <button class="p-close" id="pClose" aria-label="Close">${ic('x')}</button>
       <h2 id="pTitle">${esc(p.name)}</h2>
-      <div class="p-sub">${esc(p.address)}, ${esc(p.city)} ${esc(p.postal)}${distText(p) ? ' · ' + esc(distText(p)) : ''}${p.approx ? ' · ' + esc(t('approx')) : ''}</div>
-      <div class="tags" style="margin-top:8px;display:flex;gap:5px;flex-wrap:wrap">${ageTags(p)}${extraTags(p)}${inspBadge(p, true)}</div>
-      <div class="p-actions">${heartBtn(id)}${ext(`https://www.google.com/maps/dir/?api=1&travelmode=transit&destination=${q}`, t('directions'))}${ext(`https://www.google.com/search?q=${encodeURIComponent(p.name + ' Ottawa')}`, t('contact'))}<button class="btn ghost small" id="copyLink">${ic('link', 'sm')}${esc(t('copyLink'))}</button></div>
-      <div class="tabs" role="tablist">${[['overview', 'tOverview'], ['safety', 'tSafety'], ['reviews', 'tReviews'], ['ask', 'tAsk']].map(([k, l]) => `<button role="tab" data-ptab="${k}" aria-selected="${ptab === k}" class="${ptab === k ? 'on' : ''}">${esc(t(l))}</button>`).join('')}</div>
+      <div class="p-sub">${esc(p.address)}, ${esc(p.city)} ${esc(p.postal)}${distText(p) ? ' · <b>' + esc(distText(p)) + '</b>' : ''}${p.approx ? ' · ' + esc(t('approx')) : ''}</div>
     </div>
-    <div class="p-body" id="pBody"></div>`;
-  renderPanelBody(p);
+    <div class="p-body" id="pBody">
+      <button class="btn big wide p-save${on ? ' on' : ''}" data-save="${id}" aria-pressed="${on}">${ic(on ? 'check' : 'heart')}<span>${esc(on ? t('pSaved') : t('pSave'))}</span>${on ? `<small>${esc(t('pSavedS', state.shortlist.length))}</small>` : ''}</button>
+      <div class="p-actions">${ext(`https://www.google.com/maps/dir/?api=1&travelmode=transit&destination=${q}`, t('directions'))}${ext(`https://www.google.com/search?q=${encodeURIComponent(p.name + ' Ottawa')}`, t('contact'))}<button class="btn ghost small" id="copyLink" aria-label="${esc(t('copyLink'))}" title="${esc(t('copyLink'))}">${ic('link', 'sm')}</button></div>
+      ${glance(p)}
+      <p class="p-limit">${ic('info', 'sm')}<span>${esc(t('pLimit'))}</span></p>
+      <h3 class="flabel p-more">${esc(t('pMore'))}</h3>
+      <div class="accs">${secs.map(([k, icon]) => `<details class="acc" data-sec="${k}"${k === sec || keep.includes(k) ? ' open' : ''}><summary>${ic(icon)}<span><b>${esc(t('sec' + k[0].toUpperCase() + k.slice(1)))}</b><small>${esc(secSummary(p, k))}</small></span>${ic('down', 'sm chev')}</summary><div class="acc-body">${secBody(p, k)}</div></details>`).join('')}</div>
+      <p class="note">${p.operator ? `${state.lang === 'fr' ? 'Exploitant' : 'Operator'}: ${esc(p.operator)} · ` : ''}<button class="link" data-lic>${esc(t('verifyLic'))} ${ic('external', 'sm')}</button></p>
+    </div>`;
   $('panel').classList.add('open'); $('panel').setAttribute('aria-hidden', 'false'); $('scrim').hidden = false;
-  $('pClose').focus();
+  if (sec === 'reviews' || keep.includes('reviews')) loadReviews(p);
+  if (sec) { const d = document.querySelector(`#panel details[data-sec="${sec}"]`); if (d) setTimeout(() => d.scrollIntoView({ block: 'nearest' }), 50); }
+  if (!keep.length) $('pClose').focus();
   if (current === 'find') { document.querySelectorAll('.pc').forEach(c => c.classList.toggle('active', c.dataset.id === id)); Object.values(markers).forEach((m, i) => m.setStyle(markerStyle(PROVIDERS[i]))); }
+}
+// The 4 facts parents asked about most: ages, safety, getting there, cost
+function glance(p) {
+  const s = insp(p), x = TRANSIT[p.id], under6 = p.kind === 'home' || ['infant', 'toddler', 'preschool', 'kindergarten'].some(k => p.spaces[k] > 0);
+  const ages = p.kind === 'home' ? [t('agency'), t('gHomeCare')] : [AGES.filter(a => p.spaces[a.key] > 0).map(a => tr(a.label)).join(', ') || '–', t('gLicensed', p.capacity)];
+  const ins = s.kind === 'ok' ? [t('inspOk'), dateText(s.r.last), 'ok'] : s.kind === 'bad' ? [t('inspBad'), dateText(s.r.last), 'bad'] : s.kind === 'na' ? [t('agency'), t('inspNone'), ''] : [t('gNoInsp'), s.r ? s.r.last.slice(0, 4) : '', ''];
+  const trip = state.home ? [distText(p), x && x.train ? t('gTrain', fmt(x.trainM)) : x && x.bus != null && x.bus <= TRANSIT_META.busMetres ? t('gBus') : ''] :
+    x && x.train ? [t('gTrain', fmt(x.trainM)), x.train] : x && x.bus != null ? [x.bus <= TRANSIT_META.busMetres ? t('gBus') : t('gBusFar', fmt(x.bus)), ''] : [t('gNoTransit'), ''];
+  const v = VERIFIED_PRICES[p.id];
+  const cost = v ? [v.text, t('confirmed')] : under6 ? [t('gCostCap', COSTS.cap), t('gCostCapS')] : [t('gCostSchool'), t('gCostSchoolS')];
+  const tile = (icon, label, [val, sub, cls]) => `<div class="g-tile${cls ? ' ' + cls : ''}">${ic(icon, 'sm')}<span class="g-l">${esc(label)}</span><b>${esc(val)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}</div>`;
+  return `<div class="glance">${tile('child', t('gAges'), ages)}${tile('shield', t('gInsp'), ins)}${tile('bus', t('gTravel'), trip)}${tile('dollar', t('gCost'), cost)}</div>`;
+}
+function secSummary(p, k) {
+  const r = INSPECTIONS[p.id], x = TRANSIT[p.id];
+  return { spaces: () => t('secSpacesS', p.capacity), safety: () => r ? t('secSafetyS', dateText(r.last), r.n2y) : t('inspNone'),
+    transit: () => x && x.train ? t('trainNear', x.train, fmt(x.trainM)) : x && x.bus != null && x.bus <= TRANSIT_META.busMetres ? t('stopsNear', x.stops) : t('noTrain'),
+    cost: () => t('secCostS'), reviews: () => t('revGoogle'), ask: () => t('secAskS') }[k]();
 }
 function costBox(p) {
   const v = VERIFIED_PRICES[p.id];
   const under6 = p.kind === 'home' || ['infant', 'toddler', 'preschool', 'kindergarten'].some(k => p.spaces[k] > 0);
   const body = v ? `<p class="big-line"><b>${esc(t('confirmed'))}:</b> ${esc(v.text)} <span class="muted">(${esc(v.how)}, ${esc(v.date)})</span></p>`
     : under6 ? `<p class="big-line">${esc(t('costCap', COSTS.cap))}</p><p class="note">${esc(t('costAsk'))}</p>` : `<p class="big-line">${esc(t('costSchool'))}</p>`;
-  return `<div class="box"><h3>${ic('dollar')}${esc(t('costTitle'))}</h3>${body}<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn ghost small" data-view="apply">${esc(t('estTitle'))}</button>${ext(SOURCES.subsidy.url, t('calc'))}</div></div>`;
+  return `${body}<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn ghost small" data-view="apply">${esc(t('estTitle'))}</button>${ext(SOURCES.subsidy.url, t('calc'))}</div>`;
 }
 // Getting there: nearest O-Train station and bus stops (OpenStreetMap, worked out ahead of time by tools/build_transit.py)
 function transitBox(p) {
   const x = TRANSIT[p.id]; if (!x || p.kind !== 'centre') return '';
   const q = encodeURIComponent(`${p.name} ${p.address} ${p.city} ON`);
-  return `<div class="box"><h3>${ic('bus')}${esc(t('transit'))}</h3><ul class="ilist">
+  return `<ul class="ilist">
       <li class="${x.train ? '' : 'muted'}">${ic('train', 'sm')}${esc(x.train ? t('trainNear', x.train, fmt(x.trainM)) : t('noTrain'))}</li>
       ${x.bus != null ? `<li>${ic('bus', 'sm')}${esc(x.bus <= TRANSIT_META.busMetres ? t('stopsNear', x.stops) : t('busFar', fmt(x.bus)))}</li>` : ''}</ul>
-    ${ext(`https://www.google.com/maps/dir/?api=1&travelmode=transit&destination=${q}`, t('transitDir'))}<p class="note">${esc(t('transitNote'))}</p></div>`;
+    ${ext(`https://www.google.com/maps/dir/?api=1&travelmode=transit&destination=${q}`, t('transitDir'))}<p class="note">${esc(t('transitNote'))}</p>`;
 }
-function renderPanelBody(p) {
-  const body = $('pBody'); if (!body) return;
-  if (ptab === 'overview') {
+function secBody(p, k) {
+  if (k === 'spaces') {
     const max = Math.max(...AGES.map(a => p.spaces[a.key]), 1);
-    body.innerHTML = (p.kind === 'centre' ? `<div class="box"><h3>${ic('child')}${esc(t('spacesByAge'))}</h3><div class="bars">${AGES.map(a => `<div class="bar${state.age === a.key ? ' hi' : ''}"><span>${esc(tr(a.label))}</span><span class="track"><span class="fill" style="width:${p.spaces[a.key] ? Math.max(4, p.spaces[a.key] / max * 100) : 0}%"></span></span><span class="n">${p.spaces[a.key] || '–'}</span></div>`).join('')}</div>
-        <p class="note"><b>${esc(t('licensedFor', p.capacity))}</b>: ${esc(t('spacesNote'))}</p></div>`
-      : `<div class="box"><h3>${ic('home')}${esc(t('agency'))}</h3><p>${state.lang === 'fr' ? 'Garde dans la maison d’une éducatrice, supervisée par cette agence agréée. Contactez l’agence pour connaître les maisons près de chez vous.' : 'Care in a provider’s home, overseen by this licensed agency. Contact the agency to find homes near you.'}</p></div>`)
-      + transitBox(p) + costBox(p) + `<p class="note">${p.operator ? `${state.lang === 'fr' ? 'Exploitant' : 'Operator'}: ${esc(p.operator)} · ` : ''}<button class="link" data-lic>${esc(t('verifyLic'))} ${ic('external', 'sm')}</button></p>`;
-  } else if (ptab === 'safety') {
+    return `<div class="bars">${AGES.map(a => `<div class="bar${state.age === a.key ? ' hi' : ''}"><span>${esc(tr(a.label))}</span><span class="track"><span class="fill" style="width:${p.spaces[a.key] ? Math.max(4, p.spaces[a.key] / max * 100) : 0}%"></span></span><span class="n">${p.spaces[a.key] || '–'}</span></div>`).join('')}</div>
+      <p class="note"><b>${esc(t('licensedFor', p.capacity))}</b>: ${esc(t('spacesNote'))}</p>`;
+  }
+  if (k === 'transit') return transitBox(p);
+  if (k === 'cost') return costBox(p);
+  if (k === 'safety') {
     const s = insp(p);
-    let html = `<div class="box"><h3>${ic('shield')}${esc(t('inspTitle'))}</h3><p class="note" style="margin:0 0 10px">${esc(t('inspBy'))}</p>`;
+    let html = `<p class="note" style="margin:0 0 10px">${esc(t('inspSnap'))}</p>`;
     if (!s.r) html += `<p>${esc(t('inspNone'))}.</p>`;
     else {
       html += `<p class="big-line">${inspBadge(p)}</p><p>${esc(t('inspSum', s.r.n2y, s.r.bad2y))}${s.r.rooms > 1 ? ` · ${s.r.rooms} ${state.lang === 'fr' ? 'locaux' : 'rooms'}` : ''}</p>
-        <ul class="timeline">${s.r.list.map(i => `<li><span>${esc(dateText(i.d))} · ${esc(t(i.type))}</span><span class="badge ${i.ok ? 'ok' : 'bad'}">${i.ok ? ic('check', 'sm') + esc(t('inspOk')) : ic('alert', 'sm') + esc(t('inspBad'))}</span></li>`).join('')}</ul>`;
+        <ul class="timeline">${s.r.list.map(i => `<li><span>${esc(dateText(i.d))} · ${esc(t(i.type))}<small>${esc(i.ok ? t('inspOkPlain') : t('inspBadPlain'))}</small></span><span class="badge ${i.ok ? 'ok' : 'bad'}">${i.ok ? ic('check', 'sm') + esc(t('inspOk')) : ic('alert', 'sm') + esc(t('inspBad'))}</span></li>`).join('')}</ul>`;
       if (s.r.issues.length) html += `<details class="more"><summary>${esc(t('inspIssues'))} (${s.r.issues.length})</summary><ul class="issues">${s.r.issues.map(i => `<li>${esc(i.t)} <span class="muted">· ${esc(dateText(i.d))}</span> ${i.c ? `<span class="crit">${esc(t('critical'))}</span>` : ''}</li>`).join('')}</ul></details>`;
     }
-    html += `<p class="note">${esc(t('source'))}: ${esc(t('ophSource'))}, ${esc(dateText(INSPECTIONS_META.feed))}.</p></div>
-      <div class="box"><h3>${ic('file')}${esc(t('licReport'))}</h3><button class="btn primary small" data-lic>${ic('clipboard', 'sm')}${esc(t('licBtn'))} ${ic('external', 'sm')}</button><p class="note">${esc(t('licHow'))}</p></div>`;
-    body.innerHTML = html;
-  } else if (ptab === 'reviews') {
-    const q = encodeURIComponent(`${p.name} ${p.address} ${p.city} ON`);
-    body.innerHTML = `<div class="box" id="gBox"><h3>${ic('star')}${esc(t('revLive'))}</h3><div id="gReviews">${CONFIG.GOOGLE_PLACES_KEY ? '…' : ''}</div>
-        ${ext(`https://www.google.com/maps/search/?api=1&query=${q}`, t('revGoogle'), 'btn primary small')}<p class="note">${esc(t('revNote'))}</p></div>
-      <details class="box more"><summary>${esc(t('tipsPreview'))}</summary><div class="example" style="margin-top:8px">${state.lang === 'fr' ? 'Exemples écrits par notre équipe, pas de vrais avis.' : 'Examples written by our team, not real reviews.'}</div><ul class="qlist">${EXAMPLE_TIPS.map(x => `<li>${esc(tr(x))}</li>`).join('')}</ul></details>`;
-    if (CONFIG.GOOGLE_PLACES_KEY) loadGoogle(p).then(html => { const el = $('gReviews'); if (el && activeId === p.id) el.innerHTML = html; });
-  } else {
-    const ages = p.kind === 'centre' ? AGES.filter(a => p.spaces[a.key] > 0) : AGES;
-    const top = TOP10.slice(0, 5).map(k => tr(CHECKLIST.find(g => k.startsWith(g.id)).items[+k.replace(/\D/g, '')]));
-    body.innerHTML = `<div class="box"><h3>${ic('question')}${esc(t('askTop'))}</h3><ol class="qlist">${top.map(x => `<li>${esc(x)}</li>`).join('')}</ol>
-        <button class="btn primary small" id="toChecklist" style="margin-top:6px">${esc(t('startChecklist'))}${ic('arrow', 'sm')}</button></div>
-      <div class="box"><h3>${ic('school')}${esc(t('ratios'))}</h3><ul class="qlist">${ages.map(a => `<li><b>${esc(tr(a.long))}</b>: ${esc(tr(a.ratio))}</li>`).join('')}</ul><p class="note">${esc(t('source'))}: ${ext(SOURCES.ratios.url, 'Ontario', 'link')}</p></div>`;
-    $('toChecklist').onclick = () => { if (!state.shortlist.includes(p.id)) toggleShortlist(p.id, true); state.clFor = p.id; save(); go('visit'); };
+    return html + `<p class="note">${esc(t('source'))}: ${esc(t('ophSource'))}, ${esc(dateText(INSPECTIONS_META.feed))}.</p>
+      <h4>${ic('file', 'sm')}${esc(t('licReport'))}</h4><button class="btn primary small" data-lic>${ic('clipboard', 'sm')}${esc(t('licBtn'))} ${ic('external', 'sm')}</button><p class="note">${esc(t('licHow'))}</p>`;
   }
+  if (k === 'reviews') {
+    const q = encodeURIComponent(`${p.name} ${p.address} ${p.city} ON`);
+    return `<div id="gReviews">${CONFIG.GOOGLE_PLACES_KEY ? '…' : ''}</div>${ext(`https://www.google.com/maps/search/?api=1&query=${q}`, t('revGoogle'), 'btn primary small')}<p class="note">${esc(t('revNote'))}</p>
+`;
+  }
+  const ages = p.kind === 'centre' ? AGES.filter(a => p.spaces[a.key] > 0) : AGES;
+  const top = TOP10.slice(0, 5).map(k2 => tr(CHECKLIST.find(g => k2.startsWith(g.id)).items[+k2.replace(/\D/g, '')]));
+  return `<ol class="qlist">${top.map(x => `<li>${esc(x)}</li>`).join('')}</ol>
+    <button class="btn primary small" id="toChecklist" style="margin:6px 0 12px">${esc(t('startChecklist'))}${ic('arrow', 'sm')}</button>
+    <h4>${esc(t('ratios'))}</h4><ul class="qlist">${ages.map(a => `<li><b>${esc(tr(a.long))}</b>: ${esc(tr(a.ratio))}</li>`).join('')}</ul><p class="note">${esc(t('source'))}: ${ext(SOURCES.ratios.url, 'Ontario', 'link')}</p>`;
 }
+function loadReviews(p) { if (CONFIG.GOOGLE_PLACES_KEY) loadGoogle(p).then(html => { const el = $('gReviews'); if (el && activeId === p.id) el.innerHTML = html; }); }
+$('panel').addEventListener('toggle', e => { if (e.target.dataset && e.target.dataset.sec === 'reviews' && e.target.open) loadReviews(BY_ID[activeId]); }, true);
 $('panel').addEventListener('click', e => {
   if (e.target.closest('#pClose')) { closePanel(); return; }
   if (e.target.closest('[data-lic]')) {   // Ontario's search cannot be opened with a name filled in: copy the name, open the search, explain where to paste
@@ -434,7 +539,7 @@ $('panel').addEventListener('click', e => {
     copyText(p.name).then(ok => toast(ok ? t('nameCopied') : p.name, 9000)); return;
   }
   if (e.target.closest('#copyLink')) { copyText(location.origin + location.pathname + '#p/' + activeId).then(ok => toast(ok ? t('linkCopied') : location.href)); return; }
-  const tb = e.target.closest('[data-ptab]'); if (tb) { ptab = tb.dataset.ptab; openPanel(activeId); return; }
+  if (e.target.closest('#toChecklist')) { const id = activeId; if (!state.shortlist.includes(id)) toggleShortlist(id, true); state.clFor = id; save(); go('visit'); return; }
   const s = e.target.closest('[data-save]'); if (s) { toggleShortlist(s.dataset.save); openPanel(s.dataset.save); }
 });
 function closePanel() { if (location.hash.startsWith('#p/')) history.replaceState(null, '', location.pathname + location.search + '#' + current); $('panel').classList.remove('open'); $('panel').setAttribute('aria-hidden', 'true'); $('scrim').hidden = true; }
@@ -486,56 +591,67 @@ function toggleShortlist(id, quiet) {
   if (i >= 0) { state.shortlist.splice(i, 1); if (!quiet) toast(t('toastRemoved')); }
   else { if (state.shortlist.length >= MAX_PICKS) { toast(t('toastFull')); return; } state.shortlist.push(id); if (!quiet) toast(t('toastSaved', state.shortlist.length)); }
   save(); renderStepper();
-  if (current === 'find') { renderList(); nextBar('nextFind', null, 'shortlist', `${t('step2')} (${state.shortlist.length})`); }
+  if (current === 'find') renderList();
+  renderDock();
   if (current === 'shortlist') renderShortlist();
 }
 function score(id) { const a = Object.values(state.answers[id] || {}); return { g: a.filter(x => x === 'good').length, u: a.filter(x => x === 'unsure').length, c: a.filter(x => x === 'concern').length }; }
 const sharedIds = (params.get('list') || '').split(',').filter(id => BY_ID[id]).slice(0, MAX_PICKS);
 let sharedOpen = sharedIds.length > 0;
+const slNoteOpen = new Set();
 function renderShortlist() {
   const n = state.shortlist.length;
   $('slMode').innerHTML = [['list', t('list')], ['compare', t('compare')]].map(([k, l]) => `<button data-m="${k}" class="${state.slMode === k ? 'on' : ''}">${esc(l)}</button>`).join('');
   $('sharedBanner').innerHTML = sharedOpen ? `<div class="shared"><span>${ic('link', 'sm')} ${esc(t('sharedBanner', sharedIds.length))} ${sharedIds.map(id => esc(BY_ID[id].name)).join(' · ')}</span><span style="display:flex;gap:8px"><button class="btn primary small" id="addShared">${esc(t('addShared'))}</button><button class="btn ghost small" id="dismissShared">${esc(t('dismiss'))}</button></span></div>` : '';
   $('slProgress').innerHTML = `<div class="slot-row" aria-hidden="true">${Array.from({ length: MAX_PICKS }, (_, i) => `<span class="slot${i < n ? ' full' : ''}${i === MIN_PICKS - 1 ? ' min' : ''}"></span>`).join('')}</div><b>${n} / 9</b><span class="muted">${esc(n === 0 ? '' : n < MIN_PICKS ? t('slNeed', MIN_PICKS - n) : t('slGood', MAX_PICKS - n))}</span>`;
-  if (!n) { $('slBody').innerHTML = `<div class="empty glass">${esc(t('slEmpty'))}<br><br><button class="btn primary" data-view="find">${esc(t('goFind'))}${ic('arrow', 'sm')}</button></div>`; $('slActions').innerHTML = ''; nextBar('nextShortlist', 'find', null); return; }
+  if (!n) { $('slBody').innerHTML = `<div class="empty glass teach">${ic('heart')}<h2>${esc(t('slEmptyT'))}</h2><p>${esc(t('slEmpty2'))}</p><button class="btn primary" data-view="find">${esc(t('goFind'))}${ic('arrow', 'sm')}</button></div>`; $('slActions').innerHTML = ''; return; }
   if (state.slMode === 'compare') renderCompare();
   else $('slBody').innerHTML = `<div class="sl" id="slList">${state.shortlist.map((id, i) => {
     const p = BY_ID[id], s = score(id), open = !!state.notes[id];
     return `<article class="si glass" draggable="true" data-id="${id}">
       <div class="rank" aria-label="Rank ${i + 1}">${i + 1}</div>
       <div><h3>${esc(p.name)}</h3><div class="meta">${esc(p.address)}${distText(p) ? ' · ' + esc(distText(p)) : ''}</div>
-        <div class="si-row">${inspBadge(p, true)}<label class="check"><input type="checkbox" data-visited="${id}" ${state.visited[id] ? 'checked' : ''}> ${esc(t('visited'))}</label>
+        <div class="si-row">${inspBadge(p, true)}${state.visited[id] ? `<span class="badge ok">${ic('check', 'sm')}${esc(t('visited'))}</span>` : ''}
           ${s.g + s.u + s.c ? `<span class="muted" style="font-size:13.5px">${esc(t('score', s.g, s.u, s.c))}</span>` : ''}
           <button class="link" data-open="${id}">${esc(t('details'))}</button><button class="link" data-cl="${id}">${esc(t('step3'))}</button></div>
-        <textarea data-note="${id}" rows="${open ? 2 : 1}" placeholder="${esc(t('notes'))}…">${esc(state.notes[id] || '')}</textarea></div>
+        ${open || slNoteOpen.has(id) ? `<textarea data-note="${id}" rows="2" placeholder="${esc(t('notes'))}…">${esc(state.notes[id] || '')}</textarea>` : `<button class="link add-note" data-slnote="${id}">+ ${esc(t('addNote'))}</button>`}</div>
       <div class="mini"><button data-move="-1" aria-label="${esc(t('up'))}">${ic('up', 'sm')}</button><button data-move="1" aria-label="${esc(t('down'))}">${ic('down', 'sm')}</button><button data-remove="${id}" aria-label="${esc(t('remove'))}">${ic('x', 'sm')}</button></div>
     </article>`;
   }).join('')}</div>`;
   $('slActions').innerHTML = `<button class="btn primary" id="shareBtn">${ic('link', 'sm')}${esc(t('share'))}</button><button class="btn ghost" id="copyReg">${ic('clipboard', 'sm')}${esc(t('copyReg'))}</button>${ext(SOURCES.registryApp.url, t('openReg'), 'btn ghost')}<button class="btn ghost" id="printBtn">${ic('printer', 'sm')}${esc(t('print'))}</button>`;
-  nextBar('nextShortlist', 'find', 'visit', t('step3'));
 }
 function renderCompare() {
   const ids = state.shortlist, ps = ids.map(id => BY_ID[id]);
   const dists = state.home ? ps.map(p => km(state.home, p)) : null, best = dists ? Math.min(...dists) : null;
-  const row = (label, cells) => `<tr><th scope="row">${esc(label)}</th>${cells.join('')}</tr>`;
-  $('slBody').innerHTML = `<div class="cmp-wrap"><table class="cmp"><thead><tr><th></th>${ps.map((p, i) => `<th scope="col">${i + 1}. ${esc(p.name)}</th>`).join('')}</tr></thead><tbody>
-    ${dists ? row(t('cmpDistance'), dists.map(d => `<td class="${d === best ? 'best' : ''}">${esc(kmText(d))}</td>`)) : ''}
-    ${row(t('cmpAges'), ps.map(p => `<td>${p.kind === 'home' ? esc(t('agency')) : AGES.filter(a => p.spaces[a.key] > 0).map(a => esc(tr(a.label))).join(', ')}</td>`))}
-    ${row(t('cmpCap'), ps.map(p => `<td>${p.kind === 'centre' ? fmt(p.capacity) : '–'}</td>`))}
-    ${row(t('cmpFrench'), ps.map(p => `<td>${p.french ? ic('check', 'sm ok') : '–'}</td>`))}
-    ${row(t('cmpInsp'), ps.map(p => `<td class="${insp(p).kind === 'ok' ? 'best' : ''}">${inspBadge(p) || '–'}</td>`))}
-    ${row(t('cmpVisit'), ids.map(id => { const s = score(id); return `<td>${s.g + s.u + s.c ? esc(t('score', s.g, s.u, s.c)) : '–'}</td>`; }))}
-    ${row(t('cmpVisited'), ids.map(id => `<td>${state.visited[id] ? ic('check', 'sm ok') : '–'}</td>`))}
-    ${row(t('wStatus'), ids.map(id => `<td>${esc(t(wKey(wOf(id).s)))}</td>`))}
-    ${row(t('notes'), ids.map(id => `<td>${esc(state.notes[id] || '')}</td>`))}
+  const sc = ids.map(score), topG = Math.max(...sc.map(x => x.g - x.c));
+  const rows = [
+    dists && [t('cmpDistance'), dists.map(d => [esc(kmText(d)), d === best])],
+    [t('cmpAges'), ps.map(p => [p.kind === 'home' ? esc(t('agency')) : AGES.filter(a => p.spaces[a.key] > 0).map(a => esc(tr(a.label))).join(', ')])],
+    state.age !== 'any' && [(x => x[0].toUpperCase() + x.slice(1))(t('stSpaces', t('storyAge')[state.age])), ps.map(p => [p.kind === 'centre' ? fmt(p.spaces[state.age] || 0) : '–', p.kind === 'centre' && p.spaces[state.age] === Math.max(...ps.map(q => q.spaces[state.age] || 0)) && p.spaces[state.age] > 0])],
+    [t('cmpCap'), ps.map(p => [p.kind === 'centre' ? fmt(p.capacity) : '–'])],
+    [t('cmpInsp'), ps.map(p => [inspBadge(p) || '–', insp(p).kind === 'ok'])],
+    [t('cmpTrain'), ps.map(p => [trainOf(p) ? `${fmt(trainOf(p).trainM)} m` : '–', !!trainOf(p)])],
+    [t('cmpFrench'), ps.map(p => [p.french ? ic('check', 'sm ok') : '–', p.french])],
+    [t('cmpVisit'), sc.map(s2 => [s2.g + s2.u + s2.c ? esc(t('score', s2.g, s2.u, s2.c)) : '–', s2.g + s2.u + s2.c > 0 && s2.g - s2.c === topG])],
+    [t('cmpVisited'), ids.map(id => [state.visited[id] ? ic('check', 'sm ok') : '–'])],
+    [t('wStatus'), ids.map(id => [esc(t(wKey(wOf(id).s)))])],
+    [t('notes'), ids.map(id => [esc(state.notes[id] || '')])],
+  ].filter(Boolean);
+  const plain = h => h.replace(/<[^>]+>/g, '').trim();
+  const shown = state.cmpDiff ? rows.filter(([, cells]) => new Set(cells.map(([h]) => plain(h))).size > 1) : rows;
+  $('slBody').innerHTML = `<div class="cmp-bar"><label class="check"><input type="checkbox" id="cmpDiff" ${state.cmpDiff ? 'checked' : ''}> ${esc(t('cmpDiff'))}</label><span class="muted">${esc(t('cmpBestNote'))}</span></div>
+    <div class="cmp-wrap"><table class="cmp"><thead><tr><th></th>${ps.map((p, i) => `<th scope="col">${i + 1}. ${esc(p.name)}</th>`).join('')}</tr></thead><tbody>
+    ${shown.map(([label, cells]) => `<tr><th scope="row">${esc(label)}</th>${cells.map(([h, b]) => `<td class="${b && ps.length > 1 ? 'best' : ''}">${h}</td>`).join('')}</tr>`).join('')}
   </tbody></table></div>`;
 }
+$('slBody').addEventListener('change', e => { if (e.target.id === 'cmpDiff') { state.cmpDiff = e.target.checked; save(); renderCompare(); } });
 $('slMode').addEventListener('click', e => { const b = e.target.closest('[data-m]'); if (b) { state.slMode = b.dataset.m; save(); renderShortlist(); } });
 $('view-shortlist').addEventListener('click', async e => {
   const id = (e.target.closest('.si') || {}).dataset?.id;
   if (e.target.closest('[data-remove]')) { toggleShortlist(e.target.closest('[data-remove]').dataset.remove); return; }
   const mv = e.target.closest('[data-move]');
   if (mv && id) { const i = state.shortlist.indexOf(id), j = i + +mv.dataset.move; if (j >= 0 && j < state.shortlist.length) { [state.shortlist[i], state.shortlist[j]] = [state.shortlist[j], state.shortlist[i]]; save(); renderShortlist(); } return; }
+  const sn = e.target.closest('[data-slnote]'); if (sn) { slNoteOpen.add(sn.dataset.slnote); renderShortlist(); const ta = document.querySelector(`[data-note="${sn.dataset.slnote}"]`); if (ta) ta.focus(); return; }
   const cl = e.target.closest('[data-cl]'); if (cl) { state.clFor = cl.dataset.cl; save(); go('visit'); return; }
   const op = e.target.closest('[data-open]'); if (op) { openPanel(op.dataset.open, 'overview'); return; }
   if (e.target.closest('#shareBtn')) { const url = `${location.origin}${location.pathname}?list=${state.shortlist.join(',')}&lang=${state.lang}#shortlist`; toast((await copyText(url)) ? t('shared') : url); return; }
@@ -558,32 +674,46 @@ $('view-shortlist').addEventListener('drop', e => {
 });
 
 /* ---------- 7. Step 3: Visit checklist ---------- */
+const noteOpen = new Set();   // questions where the parent asked for a note box
+function shownQs() { return CHECKLIST.flatMap(g => g.items.map((q, i) => [g, q, g.id + i])).filter(([, , k]) => state.clMode !== 'top' || TOP10.includes(k)); }
+function visitCount(id = state.clFor) { const ans = state.answers[id] || {}, qs = shownQs(); return { a: qs.filter(([, , k]) => ans[k]).length, n: qs.length }; }
 function renderVisit() {
   if (state.clFor !== 'general' && !state.shortlist.includes(state.clFor)) state.clFor = 'general';
-  $('clMode').innerHTML = [['top', t('top10')], ['all', t('allQ')]].map(([k, l]) => `<button data-mode="${k}" class="${state.clMode === k ? 'on' : ''}">${esc(l)}</button>`).join('');
-  $('clFor').innerHTML = `<span class="flabel" style="align-self:center;margin-right:4px">${esc(t('vFor'))}</span>` + [['general', t('general')], ...state.shortlist.map(id => [id, BY_ID[id].name])].map(([v, l]) => `<button class="chip${state.clFor === v ? ' on' : ''}" data-for="${v}" style="white-space:nowrap">${esc(l)}</button>`).join('');
   const ans = state.answers[state.clFor] || {}, notes = state.qnotes[state.clFor] || {}, top = state.clMode === 'top';
-  $('clGroups').innerHTML = CHECKLIST.map(g => {
-    const shown = g.items.map((q, i) => [q, i]).filter(([, i]) => !top || TOP10.includes(g.id + i));
-    if (!shown.length) return '';
-    return `<details class="group glass" open><summary>${esc(tr(g.title))}<span class="gcount">${shown.filter(([, i]) => ans[g.id + i]).length} / ${shown.length}</span></summary>
-      ${shown.map(([q, i]) => { const k = g.id + i; return `<div class="q" data-k="${k}"><span class="qt">${TOP10.includes(k) && !top ? ic('star', 'sm star') : ''}${esc(tr(q))}</span>
-        <span class="ans">${['good', 'unsure', 'concern'].map(v => `<button type="button" data-v="${v}" class="${ans[k] === v ? 'on' : ''}" aria-pressed="${ans[k] === v}">${esc(t(v))}</button>`).join('')}</span>
-        <input type="text" placeholder="${esc(t('note'))}…" value="${esc(notes[k] || '')}" aria-label="${esc(t('note'))}"></div>`; }).join('')}</details>`;
-  }).join('');
-  const s = score(state.clFor), tot = s.g + s.u + s.c || 1;
-  $('clScore').innerHTML = `<h3>${esc(state.clFor === 'general' ? t('general') : BY_ID[state.clFor].name)}</h3><div class="scorebar"><i style="width:${s.g / tot * 100}%;background:var(--good)"></i><i style="width:${s.u / tot * 100}%;background:#e2b04a"></i><i style="width:${s.c / tot * 100}%;background:var(--bad)"></i></div><p class="muted" style="margin:0">${esc(t('score', s.g, s.u, s.c))}</p>
+  $('vLeadTxt').textContent = t('vLead2');
+  $('vHow').innerHTML = [t('vHow1'), t('vHow2'), t('vHow3')].map((x, i) => `<li><span class="vh-n">${i + 1}</span>${esc(x)}</li>`).join('');
+  $('clFor').innerHTML = `<span class="flabel">${esc(t('vFor'))}</span>` + [['general', t('general')], ...state.shortlist.map(id => [id, BY_ID[id].name])].map(([v, l]) => { const c = visitCount(v);
+    return `<button class="chip${state.clFor === v ? ' on' : ''}" data-for="${v}" aria-pressed="${state.clFor === v}">${esc(l)}${v !== 'general' ? ` <small>${c.a}/${c.n}</small>` : ''}</button>`; }).join('')
+    + (state.shortlist.length ? '' : `<span class="muted vh-note">${esc(t('vNoProgram'))}</span>`);
+  const qRow = (q, k, num) => `<div class="q" data-k="${k}"><span class="qt">${num ? `<span class="qn">${num}</span>` : ''}${esc(tr(q))}</span>
+    <span class="ans">${['good', 'unsure', 'concern'].map(v => `<button type="button" data-v="${v}" class="${ans[k] === v ? 'on' : ''}" aria-pressed="${ans[k] === v}">${esc(t(v))}</button>`).join('')}</span>
+    ${notes[k] || noteOpen.has(k) ? `<input type="text" placeholder="${esc(t('note'))}…" value="${esc(notes[k] || '')}" aria-label="${esc(t('note'))}">` : `<button type="button" class="link add-note" data-addnote="${k}">+ ${esc(t('addNote'))}</button>`}</div>`;
+  const toggle = `<p class="more-q"><button class="btn ghost small" data-mode="${top ? 'all' : 'top'}">${esc(top ? t('vShowAll') : t('vShowTop'))}</button></p>`;
+  if (top) {
+    const c = visitCount();
+    $('clGroups').innerHTML = `<button class="vm-start glass" id="vmGo">${ic('play')}<span><b>${esc(t('vmStart'))}</b><small>${esc(t('vmStartS'))}</small></span>${ic('arrow', 'sm')}</button><section class="group glass qcard"><div class="qcard-head"><div><h2>${esc(t('vTopTitle'))}</h2><p class="muted">${esc(t('vTopLead'))}</p></div><span class="gcount">${esc(t('vProgress', c.a, c.n))}</span></div>
+      ${shownQs().map(([, q, k], i) => qRow(q, k, i + 1)).join('')}</section>` + toggle;
+  } else {
+    $('clGroups').innerHTML = CHECKLIST.map((g, gi) => `<details class="group glass"${gi === 0 ? ' open' : ''}><summary>${esc(tr(g.title))}<span class="gcount">${g.items.filter((_, i) => ans[g.id + i]).length} / ${g.items.length}</span></summary>
+      ${g.items.map((q, i) => qRow(q, g.id + i)).join('')}</details>`).join('') + toggle;
+  }
+  const s = score(state.clFor), tot = s.g + s.u + s.c || 1, c = visitCount();
+  $('clScore').innerHTML = `<h3>${esc(state.clFor === 'general' ? t('general') : BY_ID[state.clFor].name)}</h3><p class="muted" style="margin:0">${esc(t('vProgress', c.a, c.n))}</p><div class="scorebar"><i style="width:${s.g / tot * 100}%;background:var(--good)"></i><i style="width:${s.u / tot * 100}%;background:#e2b04a"></i><i style="width:${s.c / tot * 100}%;background:var(--bad)"></i></div><p class="muted" style="margin:0;font-size:14px">${esc(t('score', s.g, s.u, s.c))}</p>
     ${state.clFor !== 'general' ? `<label class="check" style="margin-top:10px"><input type="checkbox" id="vVisited" ${state.visited[state.clFor] ? 'checked' : ''}> ${esc(t('visited'))}</label>` : ''}`;
   const p = BY_ID[state.clFor];
   const ages = p && p.kind === 'centre' ? AGES.filter(a => p.spaces[a.key] > 0) : AGES;
-  $('clRatio').innerHTML = `<h3>${esc(t('ratios'))}</h3><ul class="ticks">${ages.map(a => `<li><b>${esc(tr(a.label))}</b>: ${esc(tr(a.ratio))}</li>`).join('')}</ul>`;
+  $('vWatchT').textContent = t('vWatch');
+  $('clRatio').innerHTML = `<h4>${esc(t('ratios'))}</h4><ul class="ticks">${ages.map(a => `<li><b>${esc(tr(a.label))}</b>: ${esc(tr(a.ratio))}</li>`).join('')}</ul><p class="note">${esc(t('source'))}: ${ext(SOURCES.questions.url, 'Ontario', 'link')}</p>`;
   $('lookFor').innerHTML = LOOK_FOR.map(x => `<li>${esc(tr(x))}</li>`).join('');
-  $('visitCal').innerHTML = p ? `<h3>${ic('calendar')}${esc(t('addVisit'))}</h3><input type="date" class="input" id="visitDate" aria-label="${esc(t('visitDate'))}" style="width:100%;margin-bottom:8px"><button class="btn ghost small" id="visitIcs">${esc(t('addVisit'))}</button>` : `<p class="note" style="margin:0">${esc(t('source'))}: ${ext(SOURCES.questions.url, 'Ontario', 'link')}</p>`;
-  nextBar('nextVisit', 'shortlist', 'apply', t('step4'));
+  $('visitCal').hidden = !p;
+  $('visitCal').innerHTML = p ? `<h3>${ic('calendar')}${esc(t('addVisit'))}</h3><input type="date" class="input" id="visitDate" aria-label="${esc(t('visitDate'))}" style="width:100%;margin-bottom:8px"><button class="btn ghost small" id="visitIcs">${esc(t('addVisit'))}</button>` : '';
+  if (current === 'visit') renderDock();
 }
 $('view-visit').addEventListener('click', e => {
   const f = e.target.closest('[data-for]'); if (f) { state.clFor = f.dataset.for; save(); renderVisit(); return; }
   const m = e.target.closest('[data-mode]'); if (m) { state.clMode = m.dataset.mode; save(); renderVisit(); return; }
+  if (e.target.closest('#vmGo')) { vmOpen(); return; }
+  const nb = e.target.closest('[data-addnote]'); if (nb) { noteOpen.add(nb.dataset.addnote); renderVisit(); const i = document.querySelector(`#clGroups .q[data-k="${nb.dataset.addnote}"] input`); if (i) i.focus(); return; }
   const b = e.target.closest('[data-v]');
   if (b) {
     const k = b.closest('.q').dataset.k, a = state.answers[state.clFor] = state.answers[state.clFor] || {};
@@ -596,6 +726,52 @@ $('view-visit').addEventListener('click', e => {
     downloadIcs('kinderguide-visit.ics', [{ date: new Date(d + 'T12:00:00'), title: `${state.lang === 'fr' ? 'Visite' : 'Visit'}: ${p.name}`, desc: `${p.address}, ${p.city}. KinderGuide: ${location.origin}${location.pathname}#visit` }]);
   }
 });
+// Visit mode: the parent holds the phone during the visit; one question per screen, tap an answer and it moves on
+let vmI = 0;
+function vmOpen() { vmI = 0; $('vmode').hidden = false; document.body.classList.add('vm-on'); renderVm(); }
+function vmClose() { $('vmode').hidden = true; document.body.classList.remove('vm-on'); renderVisit(); const b = $('vmGo'); if (b) b.focus(); }
+function renderVm() {
+  const qs = shownQs(), id = state.clFor, ans = state.answers[id] || {}, name = id === 'general' ? t('general') : BY_ID[id].name;
+  const head = `<div class="vm-top"><span class="vm-for">${esc(t('vmFor'))}: <b>${esc(name)}</b></span><button class="p-close" data-vm="close" aria-label="${esc(t('vmClose'))}">${ic('x')}</button></div>`;
+  if (vmI >= qs.length) {
+    const sc = score(id);
+    $('vmode').innerHTML = `${head}<div class="vm-body vm-end"><span class="vm-check">${ic('check')}</span><h2 id="vmQ">${esc(t('vmEndT'))}</h2><p class="vm-sum">${esc(t('vmEnd', sc.g, sc.u, sc.c))}</p><p class="muted">${esc(t('vmEndS'))}</p>
+      ${id !== 'general' ? `<label class="check"><input type="checkbox" data-vm="visited" ${state.visited[id] ? 'checked' : ''}> ${esc(t('vmMark'))}</label>` : ''}
+      <div class="vm-actions"><button class="btn ghost" data-vm="prev">${ic('back', 'sm')}${esc(t('vmPrev'))}</button><button class="btn primary" data-vm="compare">${esc(t('vmToCompare'))}${ic('arrow', 'sm')}</button></div></div>`;
+    $('vmode').querySelector('.btn.primary').focus(); return;
+  }
+  const [g, q, k] = qs[vmI], cur = ans[k], note = (state.qnotes[id] || {})[k] || '';
+  $('vmode').innerHTML = `${head}<div class="vm-prog" aria-hidden="true"><i style="width:${vmI / qs.length * 100}%"></i></div>
+    <div class="vm-body"><p class="vm-of">${esc(t('vmOf', vmI + 1, qs.length))} · ${esc(tr(g.title))}</p><h2 id="vmQ">${esc(tr(q))}</h2>
+      <div class="vm-ans">${['good', 'unsure', 'concern'].map((v, i) => `<button class="vm-a ${v}${cur === v ? ' on' : ''}" data-vmv="${v}" aria-pressed="${cur === v}"><span class="vm-k">${i + 1}</span>${esc(t(v))}</button>`).join('')}</div>
+      <input class="input vm-note" type="text" placeholder="${esc(t('note'))}…" value="${esc(note)}" aria-label="${esc(t('note'))}" data-vmk="${k}">
+      <div class="vm-actions"><button class="btn ghost" data-vm="prev" ${vmI ? '' : 'disabled'}>${ic('back', 'sm')}${esc(t('vmPrev'))}</button><button class="btn ghost" data-vm="next">${esc(vmI === qs.length - 1 ? t('vmDone') : t('vmSkip'))}${ic('arrow', 'sm')}</button></div>
+      <p class="vm-keys">${esc(t('vmKeys'))}</p></div>`;
+  const on = $('vmode').querySelector('.vm-a.on') || $('vmode').querySelector('.vm-a'); on.focus();
+}
+function vmAnswer(v) {
+  const k = shownQs()[vmI][2], a = state.answers[state.clFor] = state.answers[state.clFor] || {};
+  a[k] = v; save(); renderVm(); renderStepper();
+  setTimeout(() => { vmI++; renderVm(); }, 260);   // a short pause so the parent sees the answer register
+}
+$('vmode').addEventListener('click', e => {
+  const v = e.target.closest('[data-vmv]'); if (v) { vmAnswer(v.dataset.vmv); return; }
+  const b = e.target.closest('[data-vm]'); if (!b) return;
+  const a = b.dataset.vm;
+  if (a === 'close') vmClose();
+  else if (a === 'prev') { vmI = Math.max(0, vmI - 1); renderVm(); }
+  else if (a === 'next') { vmI++; renderVm(); }
+  else if (a === 'compare') { vmClose(); state.slMode = 'compare'; save(); go('shortlist'); }
+});
+$('vmode').addEventListener('change', e => { if (e.target.dataset.vm === 'visited') { state.visited[state.clFor] = e.target.checked; save(); renderStepper(); } });
+$('vmode').addEventListener('input', e => { const k = e.target.dataset.vmk; if (k) { const n = state.qnotes[state.clFor] = state.qnotes[state.clFor] || {}; n[k] = e.target.value; save(); } });
+$('vmode').addEventListener('keydown', e => {
+  if (e.target.classList.contains('vm-note')) { if (e.key === 'Escape') vmClose(); return; }
+  if (e.key === 'Escape') vmClose();
+  else if (['1', '2', '3'].includes(e.key) && vmI < shownQs().length) vmAnswer(['good', 'unsure', 'concern'][+e.key - 1]);
+  else if (e.key === 'ArrowRight') { vmI = Math.min(shownQs().length, vmI + 1); renderVm(); }
+  else if (e.key === 'ArrowLeft') { vmI = Math.max(0, vmI - 1); renderVm(); }
+});
 $('view-visit').addEventListener('change', e => { if (e.target.id === 'vVisited') { state.visited[state.clFor] = e.target.checked; save(); renderStepper(); } });
 $('view-visit').addEventListener('input', e => {
   if (e.target.tagName !== 'INPUT' || !e.target.closest('.q')) return;
@@ -604,23 +780,55 @@ $('view-visit').addEventListener('input', e => {
 
 /* ---------- 8. Step 4: Apply (plan + cost) ---------- */
 const monthly = (perDay, days) => Math.round(perDay * days * 52 / 12);
+// Four stages that follow the City's own registry screens (ottawa.ca "Apply for child care", checked Nov 2, 2026)
+const APHASES = [
+  { k: 'ready', label: 'phReady', items: ['r1', 'r2', 'r3', 'r4'] },
+  { k: 'registry', label: 'phRegistry', items: ['g1', 'g2', 'g3', 'g4', 'g5', 'g6', 'g7', 'g8'] },
+  { k: 'wait', label: 'phWait', items: ['w1', 'w2', 'w3'] },
+  { k: 'offer', label: 'phOffer', items: ['o1', 'o2', 'o3', 'o4'] },
+];
+const ALL_AP = APHASES.flatMap(ph => ph.items);
+if (state.tasks && Object.keys(state.tasks).length && !state.ap) {   // plans saved before the Nov 2 redesign
+  state.ap = {}; [[1, ['g1']], [2, ['g6', 'g7']], [3, ['w1']], [4, ['r4']], [5, ['w3']]].forEach(([n, ks]) => { if (state.tasks[n]) ks.forEach(k => { state.ap[k] = true; }); });
+}
+state.ap = state.ap || {}; state.applied = state.applied || {};
+const phDone = ph => ph.items.filter(k => state.ap[k]).length;
+function apExtra(k) {
+  const n = state.shortlist.length;
+  const dateIn = (id, v, lbl) => `<label class="ap-in"><span>${esc(lbl)}</span><input type="date" class="input" id="${id}" value="${esc(v || '')}"></label>`;
+  const ranked = () => n ? `<ul class="aplist">${state.shortlist.map((id, i) => `<li><label class="check"><input type="checkbox" data-applied="${id}" ${state.applied[id] ? 'checked' : ''}> <span>${i + 1}. ${esc(BY_ID[id].name)}</span></label><button class="btn ghost small" data-copyname="${id}">${ic('clipboard', 'sm')}${esc(t('copyName'))}</button></li>`).join('')}</ul>` : `<button class="btn ghost small" data-view="find">${esc(t('goFind'))}${ic('arrow', 'sm')}</button>`;
+  return {
+    r1: `<div class="row"><button class="btn ghost small" data-view="shortlist">${esc(t('step2'))}${ic('arrow', 'sm')}</button></div>`,
+    r2: `<div class="row">${dateIn('apBirth', state.birth, t('birthL'))}</div>${state.birth ? `<p class="note">${esc(t('ageAtStart', tr(AGE[startInfo().group].label).toLowerCase(), dateText(startInfo().when)))}</p>` : ''}`,
+    r3: `<div class="row">${dateIn('apNeed', state.need, t('needL'))}<div class="seg" data-est="estDays" role="group" aria-label="${esc(t('estDays'))}">${[1, 2, 3, 4, 5].map(d => `<button data-v="${d}" class="${state.estDays === d ? 'on' : ''}">${d}</button>`).join('')}</div></div>`,
+    r4: `<div class="row">${ext(SOURCES.subsidy.url, t('calc'))}</div>`,
+    g1: `<div class="row">${ext(SOURCES.registryApp.url, t('openReg'), 'btn primary small')}${ext(SOURCES.registry.url, t('howReg'))}</div>`,
+    g5: `<p class="ap-chose">${esc(t('yourChoice'))}: <b>${esc(state.need ? dateText(state.need) : t('notSet'))}</b> · <b>${esc(t('daysWk', state.estDays))}</b></p>`,
+    g6: ranked(),
+    g7: n ? `<div class="row"><button class="btn ghost small" id="copyReg2">${ic('clipboard', 'sm')}${esc(t('copyReg'))}</button></div>` : '',
+    w1: `<div class="row"><button class="btn ghost small" id="icsBtn">${ic('bell', 'sm')}${esc(t('reminders'))}</button></div>`,
+    w3: `<div class="row">${ext(SOURCES.earlyon.url, t('findEarlyon'))}</div>`,
+    o2: `<div class="row">${ext(SOURCES.subsidyApply.url, t('subApply'), 'btn primary small')}</div><details class="more"><summary>${esc(t('subDocs'))}</summary><ul class="ilist dots">${SUBSIDY.docs.map(x => `<li>${esc(tr(x))}</li>`).join('')}<li>${esc(t('docsRR'))}</li></ul>
+      <p class="flabel">${esc(t('subWho'))}</p><ul class="ilist dots">${SUBSIDY.who.map(x => `<li>${esc(tr(x))}</li>`).join('')}</ul><p class="note">${esc(t('checked', dateText(CHECKED)))}</p></details>`,
+  }[k] || '';
+}
 function renderApply() {
-  const list = state.shortlist.map((id, i) => `${i + 1}. ${BY_ID[id].name}`).join('\n');
-  const tasks = [
-    { n: 1, h: t('task1'), d: t('task1d'), act: ext(SOURCES.registryApp.url, t('openReg'), 'btn primary small') + ext(SOURCES.registry.url, t('howReg'), 'btn ghost small') },
-    { n: 2, h: t('task2'), d: t('task2d'), act: state.shortlist.length ? `<button class="btn ghost small" id="copyReg2">${ic('clipboard', 'sm')}${esc(t('copyReg'))}</button>` : `<button class="btn ghost small" data-view="find">${esc(t('goFind'))}</button>`, extra: list ? `<pre>${esc(list)}</pre>` : '' },
-    { n: 3, h: t('task3'), d: t('task3d'), act: `<button class="btn ghost small" id="icsBtn">${ic('bell', 'sm')}${esc(t('reminders'))}</button>` },
-    { n: 4, h: t('task4'), d: t('task4d'), act: ext(SOURCES.subsidy.url, t('calc')),
-      extra: `<div class="keyfact">${ic('clock', 'sm')}<span>${esc(t('subKey'))}</span></div><details class="more"><summary>${esc(t('subTitle'))}</summary><p class="flabel">${esc(t('subDocs'))}</p><ul class="ilist dots">${SUBSIDY.docs.map(x => `<li>${esc(tr(x))}</li>`).join('')}</ul>
-        <p class="flabel">${esc(t('subWho'))}</p><ul class="ilist dots">${SUBSIDY.who.map(x => `<li>${esc(tr(x))}</li>`).join('')}</ul><p class="note">${ext(SOURCES.subsidyApply.url, t('subApply'), 'link')} · ${esc(t('checked', dateText(CHECKED)))}</p></details>` },
-    { n: 5, h: t('task5'), d: t('task5d'), act: ext(SOURCES.earlyon.url, t('findEarlyon')),
-      extra: `<details class="more"><summary>${esc(t('waitTitle'))}</summary><ol class="ilist num">${WAIT_TIPS.map(x => `<li>${esc(tr(x))}</li>`).join('')}</ol></details>` },
-  ];
-  const done = tasks.filter(x => state.tasks[x.n]).length;
-  $('tasks').innerHTML = tasks.map(x => `<li class="task glass${state.tasks[x.n] ? ' is-done' : ''}"><span class="tn">${state.tasks[x.n] ? ic('check') : x.n}</span><div><h3>${esc(x.h)}</h3><p>${esc(x.d)}</p>${x.extra || ''}
-    <div class="row">${x.act}<button class="btn small ${state.tasks[x.n] ? 'done' : 'ghost'}" data-task="${x.n}" aria-pressed="${!!state.tasks[x.n]}">${state.tasks[x.n] ? ic('check', 'sm') + esc(t('done')) : esc(t('markDone'))}</button></div></div></li>`).join('');
-  const C = 2 * Math.PI * 26, frac = done / tasks.length;
-  $('planRing').innerHTML = `<svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="26" fill="none" stroke="rgba(15,107,107,.15)" stroke-width="7"/><circle cx="32" cy="32" r="26" fill="none" stroke="var(--good)" stroke-width="7" stroke-linecap="round" stroke-dasharray="${C * frac} ${C}" transform="rotate(-90 32 32)"/></svg><span>${esc(t('planProgress', done, tasks.length))}</span>`;
+  if (!APHASES.some(ph => ph.k === state.aPhase)) state.aPhase = (APHASES.find(ph => phDone(ph) < ph.items.length) || APHASES[0]).k;
+  const phI = APHASES.findIndex(ph => ph.k === state.aPhase), ph = APHASES[phI];
+  $('aLeadTxt').textContent = t('aLead2');
+  $('aPhases').innerHTML = APHASES.map((x, i) => `<button role="tab" class="ph${x.k === ph.k ? ' on' : ''}${phDone(x) === x.items.length ? ' done' : ''}" data-aphase="${x.k}" aria-selected="${x.k === ph.k}"><span class="ph-n">${phDone(x) === x.items.length ? ic('check', 'sm') : i + 1}</span><b>${esc(t(x.label))}</b><small>${esc(t('stepsOf', phDone(x), x.items.length))}</small></button>`).join('');
+  const num = k => ph.items.indexOf(k) + 1;
+  $('tasks').innerHTML = ph.items.map(k => { const on = !!state.ap[k], d = t(k + 'd', state.shortlist.length);
+    return `<li class="task glass${on ? ' is-done' : ''}"><button class="tn" data-ap="${k}" aria-pressed="${on}" aria-label="${esc(t('toggleDone'))}: ${esc(t(k))}">${on ? ic('check') : num(k)}</button><div><h3>${esc(t(k))}</h3><p>${esc(d)}</p>${apExtra(k)}</div></li>`; }).join('');
+  $('aFoot').innerHTML = (ph.k === 'registry' ? `<p class="note ap-help">${ic('info', 'sm')}<span>${esc(t('gLimit'))} ${esc(t('gHelp'))}</span></p>` : '')
+    + (phI < APHASES.length - 1 ? `<div class="ap-next"><button class="btn primary" data-aphase="${APHASES[phI + 1].k}">${esc(t('nextPhase', t(APHASES[phI + 1].label)))}${ic('arrow', 'sm')}</button></div>` : '');
+  const done = ALL_AP.filter(k => state.ap[k]).length, C = 2 * Math.PI * 26, frac = done / ALL_AP.length;
+  $('planRing').innerHTML = `<svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="26" fill="none" stroke="rgba(15,107,107,.15)" stroke-width="7"/><circle cx="32" cy="32" r="26" fill="none" stroke="var(--good)" stroke-width="7" stroke-linecap="round" stroke-dasharray="${C * frac} ${C}" transform="rotate(-90 32 32)"/></svg><span>${esc(t('planProgress', done, ALL_AP.length))}</span>`;
+  $('cheat').innerHTML = `<h3>${ic('clipboard')}${esc(t('cheatT'))}</h3><p class="muted" style="margin:0 0 8px;font-size:14px">${esc(t('cheatS'))}</p><dl class="cheat">
+    <dt>${esc(t('birthL'))}</dt><dd>${esc(state.birth ? dateText(state.birth) : t('notSet'))}</dd><dt>${esc(t('needL'))}</dt><dd>${esc(state.need ? dateText(state.need) : t('notSet'))}</dd>
+    <dt>${esc(t('estDays'))}</dt><dd>${esc(String(state.estDays))}</dd><dt>${esc(t('slTitle'))}</dt><dd>${state.shortlist.length ? `<ol>${state.shortlist.map(id => `<li>${esc(BY_ID[id].name)}</li>`).join('')}</ol>` : esc(t('notSet'))}</dd></dl>`;
+  $('timeline').hidden = $('estimator').hidden = ph.k !== 'ready'; $('cheat').hidden = ph.k !== 'registry';   // each card only where it is used
+  $('waitlist').hidden = ph.k !== 'wait';
   renderEstimator(); renderTimeline(); renderWaitlist();
 }
 // Waitlist tracker: status and dates for each saved program, kept only on this device
@@ -656,7 +864,7 @@ $('waitlist').addEventListener('click', e => {
   toast(t('calDone'));
 });
 function renderTimeline() {
-  if (!state.birth) { $('timeline').innerHTML = `<h3>${ic('calendar')}${esc(t('tlTitle'))}</h3><p class="muted">${esc(t('tlEmpty'))}</p><button class="btn ghost small" data-view="home">${esc(t('tlEdit'))}</button>`; return; }
+  if (!state.birth) { $('timeline').innerHTML = ''; $('timeline').hidden = true; return; }   // the date is asked in "Get ready"
   const today = ymd(new Date()), by = +state.birth.slice(0, 4);
   const ev = [{ d: today, txt: t('tlRegister'), key: 'today' }];
   if (state.birth > today) ev.push({ d: state.birth, txt: t('tlBorn') });
@@ -664,7 +872,7 @@ function renderTimeline() {
   if (state.need) ev.push({ d: state.need, txt: `${t('tlNeed')}: ${tr(AGE[ageGroupAt(state.birth, state.need)].label)}`, key: 'need' });
   const list = ev.filter(e => e.d >= today).sort((a, b) => a.d.localeCompare(b.d));
   $('timeline').innerHTML = `<h3>${ic('calendar')}${esc(t('tlTitle'))}</h3><ol class="tl">${list.map(e => `<li class="${e.key || ''}"><b>${esc(e.key === 'today' ? t('tlToday') : dateText(e.d))}</b><span>${esc(e.txt)}</span></li>`).join('')}</ol>
-    <button class="link" data-view="home">${esc(t('tlEdit'))}</button>`;
+`;
 }
 function printPlan() {
   const fr = state.lang === 'fr', si = startInfo();
@@ -674,7 +882,7 @@ function printPlan() {
       return `<li><b>${esc(p.name)}</b>, ${esc(p.address)}, ${esc(p.city)} ${esc(p.postal)}${state.home ? ' · ' + esc(kmText(km(state.home, p))) : ''}<br>
         ${wOf(id).s !== 'none' ? `${esc(t(wKey(wOf(id).s)))}${wOf(id).a ? ' (' + esc(dateText(wOf(id).a)) + ')' : ''} · ` : ''}${r ? `${esc(t('inspLast'))}: ${esc(dateText(r.last))} (${esc(r.ok ? t('inspOk') : t('inspBad'))}) · ` : ''}${sc.g + sc.u + sc.c ? esc(t('score', sc.g, sc.u, sc.c)) + ' · ' : ''}${state.visited[id] ? esc(t('visited')) : ''}
         ${state.notes[id] ? `<br><i>${esc(state.notes[id])}</i>` : ''}</li>`; }).join('')}</ol>` : `<p>${esc(t('planNone'))}</p>`}
-    <h2>${esc(t('planNext'))}</h2><ol>${[1, 2, 3, 4, 5].map(n => `<li>${state.tasks[n] ? '[x] ' : '[ ] '}${esc(t('task' + n))}: ${esc(t('task' + n + 'd'))}</li>`).join('')}</ol>
+    <h2>${esc(t('planNext'))}</h2>${APHASES.map(ph => `<h3>${esc(t(ph.label))}</h3><ol>${ph.items.map(k => `<li>${state.ap[k] ? '[x] ' : '[ ] '}${esc(t(k))}</li>`).join('')}</ol>`).join('')}
     ${state.birth ? `<h2>${esc(t('tlTitle'))}</h2>${$('timeline').querySelector('ol') ? $('timeline').querySelector('ol').outerHTML : ''}` : ''}
     <h2>${esc(t('planLinks'))}</h2><ul>${['registry', 'subsidy', 'cwelcc', 'licensing', 'earlyon'].map(k => `<li>${esc(SOURCES[k].label)}: ${esc(SOURCES[k].url)}</li>`).join('')}</ul>
     <p class="muted">${fr ? 'KinderGuide Ottawa est un projet étudiant, non affilié à la Ville d’Ottawa.' : 'KinderGuide Ottawa is a student project, not affiliated with the City of Ottawa.'} ${esc(location.origin + location.pathname)}</p>`;
@@ -688,14 +896,19 @@ function renderEstimator() {
   const school = state.estAge === 'school6', d = state.estDays;
   $('estimator').innerHTML = `<h3>${ic('dollar')}${esc(t('estTitle'))}</h3>
     <span class="flabel">${esc(t('estAge'))}</span><div class="chips" data-est="estAge" style="margin:6px 0 12px">${ages.map(([k, l]) => `<button class="chip${state.estAge === k ? ' on' : ''}" data-v="${k}">${esc(l)}</button>`).join('')}</div>
-    <span class="flabel">${esc(t('estDays'))}</span><div class="seg" data-est="estDays" style="margin:6px 0 12px">${[1, 2, 3, 4, 5].map(n => `<button data-v="${n}" class="${d === n ? 'on' : ''}">${n}</button>`).join('')}</div>
-    ${school ? `<div class="est-out">${esc(t('estSchool'))}</div>` : `<div class="est-out">${esc(t('estOut', fmt(monthly(COSTS.cap, d))))}</div><p class="muted">${esc(t('estAvg', fmt(monthly(COSTS.average, d))))}</p>`}
+    ${school ? `<div class="est-out">${esc(t('estSchool'))}</div>` : `<div class="est-out">${esc(t('estOut', fmt(monthly(COSTS.cap, d))))}</div><p class="muted">${esc(t('daysWk', d))} · ${esc(t('estAvg', fmt(monthly(COSTS.average, d))))}</p>`}
     <p class="note">${esc(t('estNote'))} ${esc(tr(COSTS.checked))} · ${ext(SOURCES.cap.url, t('source'), 'link')}</p>`;
 }
+$('view-apply').addEventListener('change', e => {
+  const a = e.target.dataset.applied; if (a) { state.applied[a] = e.target.checked; if (state.shortlist.every(id => state.applied[id]) && !state.ap.g6) { state.ap.g6 = true; save(); renderApply(); renderStepper(); const b = document.querySelector(`[data-applied="${a}"]`); if (b) b.focus(); } else save(); return; }
+  if (e.target.id === 'apBirth' || e.target.id === 'apNeed') { state[e.target.id === 'apBirth' ? 'birth' : 'need'] = e.target.value || null; if (state.birth) state.age = startInfo().group; save(); renderApply(); }
+});
 $('view-apply').addEventListener('click', async e => {
-  const tk = e.target.closest('[data-task]'); if (tk) { const n = tk.dataset.task; state.tasks[n] = !state.tasks[n]; save(); renderApply(); renderStepper(); return; }
+  const tk = e.target.closest('[data-ap]'); if (tk) { const k = tk.dataset.ap; state.ap[k] = !state.ap[k]; save(); renderApply(); renderStepper(); renderDock(); const b = document.querySelector(`[data-ap="${k}"]`); if (b) b.focus(); return; }
+  const ph = e.target.closest('[data-aphase]'); if (ph) { state.aPhase = ph.dataset.aphase; save(); renderApply(); $('aPhases').scrollIntoView({ block: 'nearest' }); return; }
+  const cn = e.target.closest('[data-copyname]'); if (cn) { toast((await copyText(BY_ID[cn.dataset.copyname].name)) ? t('copied') : BY_ID[cn.dataset.copyname].name); return; }
   const ch = e.target.closest('[data-est] [data-v]');
-  if (ch) { const k = ch.closest('[data-est]').dataset.est; state[k] = k === 'estDays' ? +ch.dataset.v : ch.dataset.v; save(); renderEstimator(); return; }
+  if (ch) { const k = ch.closest('[data-est]').dataset.est; state[k] = k === 'estDays' ? +ch.dataset.v : ch.dataset.v; save(); if (k === 'estDays') renderApply(); else renderEstimator(); return; }
   if (e.target.closest('#copyReg2')) { const txt = state.shortlist.map((x, i) => `${i + 1}. ${BY_ID[x].name} (${BY_ID[x].address}, ${BY_ID[x].city})`).join('\n'); toast((await copyText(txt)) ? t('copied') : txt); return; }
   if (e.target.closest('#icsBtn')) {
     const d = new Date(); d.setMonth(d.getMonth() + 2);   // every 2 months: our suggestion, not a City rule

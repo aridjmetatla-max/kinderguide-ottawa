@@ -1,6 +1,6 @@
 /* KinderGuide service worker: network first (so updates always show), with a cached copy for offline use. */
-const CACHE = 'kinderguide-v42';
-const CORE = ['./', 'index.html', 'styles.css?v=42', 'icons.js?v=42', 'config.js?v=42', 'data/providers.js?v=42', 'data/inspections.js?v=42', 'data/transit.js?v=42', 'content.js?v=42', 'app.js?v=42', 'manifest.webmanifest', 'icon-192.png'];
+const CACHE = 'kinderguide-v46';
+const CORE = ['./', 'index.html', 'styles.css?v=46', 'icons.js?v=46', 'config.js?v=46', 'data/providers.js?v=46', 'data/inspections.js?v=46', 'data/transit.js?v=46', 'content.js?v=46', 'app.js?v=46', 'manifest.webmanifest', 'icon-192.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(CORE)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', e => {
