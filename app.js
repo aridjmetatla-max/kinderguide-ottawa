@@ -4,7 +4,7 @@
    2. Navigation and stepper             8. Step 4: Apply (plan + cost)
    3. Home                               9. Services hub and Ask Kip
    4. Step 1: Find (filters, list, map) 10. About the data
-   5. Details panel (+ Google reviews)  11. Kip helper and tour
+   5. Details panel (+ Google reviews)  11. Help                
    6. Step 2: Shortlist (compare, share) 12. Start-up
    ================================================================== */
 
@@ -93,6 +93,27 @@ function inspBadge(p, short) {
   return short ? '' : `<span class="badge none">${esc(t('inspNone'))}</span>`;
 }
 
+// Addresses as people write them. The City's file puts some French street types after the name ("349 Olmstead Rue")
+// and has a few incomplete ones; ADDR_FIX entries were checked against OpenStreetMap (Nov 3). Only the display changes.
+const ADDR_FIX = { c2: 'Confederation Building, 229 Wellington Street', c145: 'Statistics Canada Main Building, 150 Tunney’s Pasture Driveway', c44: '116-4100 Strandherd Drive',
+  c25: '1349 Randall Avenue', c27: '2605 Alta Vista Drive', c28: '557 Queen Mary Street', c30: '700 Montréal Road', c31: '258 Lisgar Street', c143: '100 Thomas More Private',
+  c113: '5473 Abbott Street East', c196: '5473 Abbott Street East', c199: '2450 River Mist Road', c270: '88 Main Street', c279: '6025 Longleaf Drive', c273: '2540 Kaladar Avenue' };
+const FR_EN = { Rue: 'Street', Chemin: 'Road', Promenade: 'Drive', Croissant: 'Crescent', Terrasse: 'Terrace', Cour: 'Court', Voie: 'Way' };
+const EN_FR = { Street: 'rue', Road: 'chemin', Drive: 'promenade', Avenue: 'avenue', Crescent: 'croissant', Terrace: 'terrasse', Boulevard: 'boulevard', Court: 'cour', Place: 'place', Way: 'voie', Private: 'privé', Parkway: 'promenade' };
+const DIRS = { Est: 'East', Ouest: 'West', Nord: 'North', Sud: 'South' }, DIRS_FR = { East: 'Est', West: 'Ouest', North: 'Nord', South: 'Sud' };
+const SMALL = new Set(['de', 'du', 'des', 'la', 'le', 'les', 'of', 'the', 'and', 'et']);
+const addrCache = {};
+function addr(p) {
+  const k = state.lang + p.id; if (k in addrCache) return addrCache[k];
+  let a = ADDR_FIX[p.id] || p.address.replace(/ (Rue|Chemin|Promenade|Croissant|Terrasse|Cour|Voie)( (Est|Ouest|Nord|Sud))?$/, (m, ty, _, d) => ' ' + FR_EN[ty] + (d ? ' ' + DIRS[d] : ''))
+    .replace(/\b[a-z][a-z]+\b/g, w => SMALL.has(w) ? w : w[0].toUpperCase() + w.slice(1));
+  if (state.lang === 'fr') {   // "349 Olmstead Street" → "349, rue Olmstead"
+    const cut = a.lastIndexOf(', '), head = cut < 0 ? '' : a.slice(0, cut + 2), m = a.slice(cut + 1).trim().match(/^([\d-]+[A-Z]?) (.+) (Street|Road|Drive|Avenue|Crescent|Terrace|Boulevard|Court|Place|Way|Private|Parkway)(?: (East|West|North|South))?$/);
+    if (m && !/^(First|Second|Third|Fourth|Fifth|Sixth|Seventh|Eighth|Ninth|Tenth)$/.test(m[2])) a = `${head}${m[1]}, ${EN_FR[m[3]]} ${m[2]}${m[4] ? ' ' + DIRS_FR[m[4]] : ''}`;
+  }
+  return (addrCache[k] = a);
+}
+
 /* ---------- 2. Navigation and stepper ---------- */
 let current = 'home';
 function stepDone(s) {
@@ -101,10 +122,16 @@ function stepDone(s) {
   if (s === 'visit' || s === 'apply') return stepStatus(s).k === 'stDone';   // same rule as the status on the home page
   return false;
 }
+// The step a parent would go to next from this page (null: nothing to do yet, or the last step)
+function nextFrom(v) { const n = state.shortlist.length; return v === 'find' || v === 'shortlist' ? (n ? STEPS[STEPS.indexOf(v) + 1] : null) : v === 'visit' ? 'apply' : null; }
 function renderStepper() {
-  $('stepper').innerHTML = STEPS.map((s, i) => `${i ? '<span class="sep" aria-hidden="true"></span>' : ''}<button class="step${current === s ? ' on' : ''}${stepDone(s) ? ' done' : ''}" data-view="${s}" ${current === s ? 'aria-current="step"' : ''}>
-      <span class="num">${stepDone(s) && current !== s ? ic('check', 'sm') : i + 1}</span><span class="lbl">${esc(t('step' + (i + 1)))}</span>${s === 'shortlist' && state.shortlist.length ? `<span class="badge-n">${state.shortlist.length}</span>` : ''}</button>`).join('');
-  $('bottomNav').innerHTML = [...STEPS.map((s, i) => `<button data-view="${s}" class="${current === s ? 'on' : ''}"><span class="num">${stepDone(s) && current !== s ? ic('check', 'sm') : i + 1}</span>${esc(t('step' + (i + 1)))}</button>`),
+  const n = state.shortlist.length, nx = nextFrom(current);
+  const done = s => s !== 'find' && stepDone(s);   // Find is never "done": parents keep coming back to it
+  const badge = s => s === 'shortlist' && n ? `<span class="badge-n" aria-label="${esc(t('stSaved', n))}">${n}</span>` : '';
+  $('stepper').innerHTML = STEPS.map((s, i) => `${i ? '<span class="sep" aria-hidden="true"></span>' : ''}<button class="step${current === s ? ' on' : ''}${done(s) ? ' done' : ''}" data-view="${s}" ${current === s ? 'aria-current="step"' : ''}>
+      <span class="num">${done(s) && current !== s ? ic('check', 'sm') : i + 1}${badge(s)}</span><span class="lbl">${esc(t('step' + (i + 1)))}</span></button>`).join('');
+  // Phones: one bar. The next step's tab is filled in, so it also does the job of the "Next" button.
+  $('bottomNav').innerHTML = [...STEPS.map((s, i) => `<button data-view="${s}" class="${current === s ? 'on' : ''}${nx === s ? ' next' : ''}"${nx === s ? ` aria-label="${esc(t('nextTab', t('step' + (i + 1))))}"` : ''}><span class="num">${done(s) && current !== s ? ic('check', 'sm') : nx === s ? ic('arrow', 'sm') : i + 1}${badge(s)}</span>${esc(t('step' + (i + 1)))}</button>`),
     `<button data-view="services" class="${current === 'services' ? 'on' : ''}"><span class="num">${ic('grid', 'sm')}</span>${esc(t('svcShort'))}</button>`].join('');
   $('svcBtn').classList.toggle('on', current === 'services');
 }
@@ -117,6 +144,7 @@ function go(view, { scroll = true } = {}) {
   closePanel(); hideKip();
   ({ home: renderHome, find: renderFind, shortlist: renderShortlist, visit: renderVisit, apply: renderApply, services: renderServices, about: renderAbout, insights: renderInsights })[view]();
   renderStepper(); renderDock(); showHint(view);
+  if (!document.body.classList.contains('ready')) requestAnimationFrame(() => document.body.classList.add('ready'));   // no fade on the first page, so a link opens its page at once
   if (view === 'find') setTimeout(() => { if (map) { map.invalidateSize(); renderMap(lastList); } }, 120);
   const idx = STEPS.indexOf(view);
   ['slEyebrow', 'vEyebrow', 'aEyebrow'].forEach(id => { const n = { slEyebrow: 2, vEyebrow: 3, aEyebrow: 4 }[id]; $(id).textContent = `${state.lang === 'fr' ? 'Étape' : 'Step'} ${n} ${state.lang === 'fr' ? 'sur' : 'of'} 4`; });
@@ -130,16 +158,12 @@ window.addEventListener('hashchange', () => { const v = location.hash.slice(1); 
 // Next-step bar, fixed at the bottom of each step: what you have done so far and a button named after the next step
 function renderDock() {
   const n = state.shortlist.length, d = $('dock');
-  const info = (icon, b, small) => `<div class="dock-info"><span class="dock-ic">${icon}</span><span><b>${esc(b)}</b><small>${esc(small)}</small></span></div>`;
+  const info = (icon, b, small) => `<div class="dock-info"><span class="dock-ic">${icon}</span><span><b>${esc(b)}</b>${small ? `<small>${esc(small)}</small>` : ''}</span></div>`;
   const btn = (view, label, cls = 'primary', back) => `<button class="btn ${cls}" data-view="${view}">${back ? ic('back', 'sm') : ''}${esc(label)}${back ? '' : ic('arrow', 'sm')}</button>`;
-  const slots = `<span class="dock-slots" aria-hidden="true">${Array.from({ length: MAX_PICKS }, (_, i) => `<i class="${i < n ? 'full' : ''}"></i>`).join('')}</span>`;
-  let html = '';
-  if (current === 'find') html = n ? info(slots, t('dockSaved', n), t('dockSavedS', n)) + btn('shortlist', t('dockToShortlist', n))
-    : info(ic('heart'), t('dockFind0'), t('dockFind0s'));
-  else if (current === 'shortlist') html = n ? info(slots, t('dockSl', n), t('dockSlS')) + `<div class="dock-btns">${btn('find', t('dockMore'), 'ghost', true)}${btn('visit', t('dockToVisit'))}</div>`
-    : info(ic('heart'), t('dockSl0'), t('dockSl0s')) + btn('find', t('dockFind'));
-  else if (current === 'visit') { const v = visitCount(); html = info(ic('clipboard'), t('dockVisit', v.a, v.n), t('dockVisitS')) + `<div class="dock-btns">${btn('shortlist', t('step2'), 'ghost', true)}${btn('apply', t('dockToApply'))}</div>`; }
-  else if (current === 'apply') html = info(ic('file'), t('dockApply'), t('dockApplyS')) + btn('visit', t('dockBackVisit'), 'ghost', true);
+  let html = '';   // computers only (phones use the bottom bar); nothing when there is no next step yet
+  if (current === 'find' && n) html = info(ic('heart'), t('dockSaved', n), t('dockSavedS', n)) + btn('shortlist', t('dockToShortlist', n));
+  else if (current === 'shortlist' && n) html = info(ic('clipboard'), t('dockSlS'), '') + `<div class="dock-btns">${btn('find', t('dockMore'), 'ghost', true)}${btn('visit', t('dockToVisit'))}</div>`;
+  else if (current === 'visit') { html = info(ic('file'), t('dockApply'), t('dockApplyS')) + `<div class="dock-btns">${btn('shortlist', t('step2'), 'ghost', true)}${btn('apply', t('dockToApply'))}</div>`; }
   d.innerHTML = html; d.hidden = !html; document.body.classList.toggle('has-dock', !!html);
 }
 
@@ -224,8 +248,8 @@ function renderHome() {
     <em class="st ${st[i].k}">${st[i].k === 'stDone' ? ic('check', 'sm') : ''}${esc(t(st[i].k))}${st[i].d ? ' · ' + esc(st[i].d) : ''}</em></button>`).join('');
   $('welcome').hidden = !back;
   $('welcome').innerHTML = back ? `<div><b>${esc(t('wbTitle'))}</b><span>${esc(t('wbLead'))}</span></div><button class="btn primary" data-view="${STEPS[nextI < 0 ? 3 : nextI]}">${esc(t('wbGo', t('nextLbl')[STEPS[nextI < 0 ? 3 : nextI]]))}${ic('arrow', 'sm')}</button>` : '';
-  const spaces = CENTRES.reduce((s, p) => s + p.capacity, 0);
-  $('stats').innerHTML = `<div><b>${fmt(PROVIDERS.length)}</b><span>${esc(t('statPrograms'))}</span></div><div><b>${fmt(spaces)}</b><span>${esc(t('statSpaces'))}</span></div><div><b>${fmt(Object.keys(INSPECTIONS).length)}</b><span>${esc(t('statInspected'))}</span></div>`;
+  // No "licensed spaces" total here: it reads like open spots, which the data cannot show
+  $('stats').innerHTML = `<div><b>${fmt(PROVIDERS.length)}</b><span>${esc(t('statPrograms'))}</span></div><div><b>${fmt(Object.keys(INSPECTIONS).length)}</b><span>${esc(t('statInspected'))}</span></div><div><b>${fmt(SERVICES.length)}</b><span>${esc(t('statServices'))}</span></div>`;
   $('svcRow').innerHTML = SERVICES.filter(s => s.top).map(serviceCard).join('');
 }
 function serviceCard(s) {
@@ -237,7 +261,7 @@ function serviceCard(s) {
 /* ---------- 4. Step 1: Find ---------- */
 let map, markerLayer, homeMarker, workMarker, radiusCircle, routeLine, activeId = null, editing = null;
 const markers = {};
-const COLORS = { centre: '#0f6b6b', home: '#7b5ea7', saved: '#e07a5f' };
+const COLORS = { centre: '#0f6b6b', home: '#7b5ea7', saved: '#102a33' };
 function renderFindControls() {
   $('fAge').innerHTML = `<option value="any">${esc(t('any'))}</option>` + AGES.map(a => `<option value="${a.key}">${esc(tr(a.long))}</option>`).join('');
   $('fAge').value = state.age;
@@ -251,6 +275,8 @@ function renderFindControls() {
   $('fQuery').placeholder = t('search'); $('fQuery').value = state.query;
   const n = [state.french, state.indigenous, !state.agencies, state.okOnly, state.trainOnly, state.route].filter(Boolean).length;
   $('fCount').hidden = !n; $('fCount').textContent = n;
+  const sum = [state.age === 'any' ? t('any') : tr(AGE[state.age].label), state.home ? t('nearX', lbl(state.home)) : t('fAll'), ...(state.home && !routeOn() ? [state.radius ? state.radius + ' km' : t('all')] : []), ...(state.query ? ['“' + state.query + '”'] : []), ...(n ? [t('fN', n)] : [])];
+  $('fSum').innerHTML = `${ic('filter', 'sm')}<span>${esc(sum.join(' · '))}</span><b>${esc(t('fEdit'))}</b>`;   // phones: the filters fold into this one line
   $('filterPop').innerHTML = [['french', 'french'], ['indigenous', 'indigenous'], ['agencies', 'homeAg'], ['okOnly', 'okOnly'], ['trainOnly', 'nearTrain']]
     .map(([k, l]) => `<label class="check"><input type="checkbox" data-f="${k}" ${state[k] ? 'checked' : ''}> ${esc(t(l))}</label>`).join('') +
     (state.home && state.work ? `<label class="check"><input type="checkbox" data-f="route" ${state.route ? 'checked' : ''}> ${ic('route', 'sm')}${esc(t('onRoute'))}</label>` : '');
@@ -267,6 +293,7 @@ document.querySelector('.find-bar').addEventListener('change', async e => {
   save(); renderFind();
 });
 document.querySelector('.find-bar').addEventListener('click', async e => {
+  if (e.target.closest('#fSum')) { const b = document.querySelector('.find-bar'); b.classList.toggle('open'); $('fSum').setAttribute('aria-expanded', String(b.classList.contains('open'))); return; }
   const r = e.target.closest('[data-r]'); if (r) { state.radius = +r.dataset.r; save(); renderFind(); return; }
   if (e.target.closest('#filterBtn')) { const pop = $('filterPop'); pop.hidden = !pop.hidden; $('filterBtn').setAttribute('aria-expanded', String(!pop.hidden)); return; }
   if (e.target.closest('#addWork')) { editing = 'work'; renderFindControls(); $('locInput').focus(); return; }
@@ -305,36 +332,46 @@ function sortedList() {
   else list.sort((a, b) => a.name.localeCompare(b.name));
   return list;
 }
-function ageTags(p) {
+const trainOf = p => p.kind === 'centre' && TRANSIT[p.id] && TRANSIT[p.id].train ? TRANSIT[p.id] : null;
+const extraTags = p => (p.french ? `<span class="tag fr">FR</span>` : '') + (p.indigenous ? `<span class="tag ind">${esc(t('indigenous'))}</span>` : '');
+// Card status line: the inspection (a problem stands out in red), then the O-Train
+function cardStatus(p) {
+  const s = insp(p), x = trainOf(p), out = [];
+  if (s.kind === 'ok') out.push(`<span class="st-ok" title="${esc(t('inspBy'))}">${ic('check', 'sm')}${esc(t('inspOk'))}</span>`);
+  else if (s.kind === 'bad') out.push(`<span class="badge bad" title="${esc(t('inspBy'))}">${ic('alert', 'sm')}${esc(t('inspBad'))}</span>`);
+  else if (s.kind !== 'na') out.push(`<span class="st-none">${esc(s.kind === 'old' ? t('inspOld', s.r.last.slice(0, 4)) : t('gNoInsp'))}</span>`);
+  if (x) out.push(`<span title="${esc(t('trainNear', x.train, fmt(x.trainM)))}">${ic('train', 'sm')}O-Train ${fmt(x.trainM)} m</span>`);
+  return out.join('<i class="sep-dot" aria-hidden="true">·</i>');
+}
+// Licensed spaces are a listing, not an open spot, so they are plain text
+function cardFacts(p) {
   if (p.kind === 'home') return `<span class="tag home">${esc(t('agency'))}</span>`;
   const ages = AGES.filter(a => p.spaces[a.key] > 0);
-  if (state.age === 'any') return ages.map(a => `<span class="tag">${esc(tr(a.label))}</span>`).join('');
-  const others = ages.filter(a => a.key !== state.age).length;   // "why it matches": the spaces for your child's age first
-  return `<span class="tag match">${ic('check', 'sm')}${esc(t('spacesFor', p.spaces[state.age], tr(AGE[state.age].label).toLowerCase()))}</span>${others ? `<span class="tag soft" title="${esc(ages.map(a => tr(a.label)).join(', '))}">${esc(t('moreAges', others))}</span>` : ''}`;
+  const txt = state.age === 'any' ? ages.map(a => tr(a.label)).join(' · ') : t('spacesFor', p.spaces[state.age], tr(AGE[state.age].label).toLowerCase()) + (ages.length > 1 ? ' · ' + t('moreAges', ages.length - 1) : '');
+  return `<span class="facts">${esc(txt)}</span>`;
 }
-const trainOf = p => p.kind === 'centre' && TRANSIT[p.id] && TRANSIT[p.id].train ? TRANSIT[p.id] : null;
-const extraTags = p => (p.french ? `<span class="tag fr">FR</span>` : '') + (p.indigenous ? `<span class="tag ind">${esc(t('indigenous'))}</span>` : '')
-  + (trainOf(p) ? `<span class="tag tr" title="${esc(t('trainNear', trainOf(p).train, trainOf(p).trainM))}">${ic('train', 'sm')}O-Train ${fmt(trainOf(p).trainM)} m</span>` : '');
 function distText(p) {
   if (routeOn()) return detour(p) < .15 ? t('onWay') : `+${kmText(detour(p))} ${t('detour')}`;
-  return state.home ? kmText(km(state.home, p)) + (p.approx ? ' ~' : '') : '';
+  return state.home ? (p.approx ? t('approxD', kmText(km(state.home, p))) : kmText(km(state.home, p))) : '';
 }
 function heartBtn(id) { const on = state.shortlist.includes(id); return `<button class="heart${on ? ' on' : ''}" data-save="${id}" aria-pressed="${on}">${ic('heart', 'sm')}${esc(on ? t('saved') : t('save'))}</button>`; }
 function renderFind() {
-  renderFindControls(); renderList();
+  listMax = 40; renderFindControls(); renderList();
   const m = document.body.classList.contains('m-map');
   $('mSwitch').innerHTML = [['list', 'list', t('mList')], ['map', 'map', t('mMap')]].map(([k, icon, l]) => `<button type="button" data-msw="${k}" class="${(k === 'map') === m ? 'on' : ''}" aria-pressed="${(k === 'map') === m}">${ic(icon, 'sm')}${esc(l)}</button>`).join('');
 }
 // Phones: list or map, one at a time (the map gets the whole screen)
 $('mSwitch').addEventListener('click', e => { const b = e.target.closest('[data-msw]'); if (!b) return; document.body.classList.toggle('m-map', b.dataset.msw === 'map'); renderFind(); setTimeout(() => { if (map) { map.invalidateSize(); renderMap(lastList); } }, 200); });
-let lastList = [];
+let lastList = [], listMax = 40;   // 40 cards at first (quick to draw), more on request
 function renderList() {
   const list = lastList = sortedList();
   renderStory(list);
   renderTip(list);
-  $('results').innerHTML = list.length ? list.slice(0, 160).map(p => `<article class="pc glass${p.id === activeId ? ' active' : ''}" data-id="${p.id}" tabindex="0" aria-label="${esc(p.name)}">
-      <div class="pc-top"><div><h3>${esc(p.name)}</h3><div class="where">${esc(p.address)}${distText(p) ? ' · <b>' + esc(distText(p)) + '</b>' : ''}</div></div>${heartBtn(p.id)}</div>
-      <div class="tags">${ageTags(p)}${extraTags(p)}${inspBadge(p, true)}</div></article>`).join('') + (list.length > 160 ? `<p class="empty">+${list.length - 160}…</p>` : '')
+  $('results').innerHTML = list.length ? list.slice(0, listMax).map(p => { const d = distText(p);
+    return `<article class="pc glass${p.id === activeId ? ' active' : ''}${insp(p).kind === 'bad' ? ' is-bad' : ''}" data-id="${p.id}" tabindex="0" aria-label="${esc(p.name)}">
+      <div class="pc-top"><div><h3>${esc(p.name)}</h3><div class="where">${esc(addr(p))}</div></div><div class="pc-side">${d ? `<b class="dist"${p.approx ? ` title="${esc(t('approxTip'))}"` : ''}>${esc(d)}</b>` : ''}${heartBtn(p.id)}</div></div>
+      <div class="pc-status">${cardStatus(p)}</div>
+      <div class="pc-foot">${cardFacts(p)}${extraTags(p)}</div></article>`; }).join('') + (list.length > listMax ? `<button class="btn ghost wide more-btn" data-more>${esc(t('showMore', Math.min(60, list.length - listMax)))}</button>` : '')
     : `<div class="empty glass">${esc(t('noResults'))}</div>`;
   const stale = (Date.now() - new Date(DATA_META.downloaded + 'T12:00:00')) / 864e5 > STALE_DAYS;
   $('results').insertAdjacentHTML('beforeend', `<p class="data-date${stale ? ' stale' : ''}">${ic(stale ? 'alert' : 'info', 'sm')}${esc(stale ? t('stale', dateText(DATA_META.downloaded)) : t('dataDate', dateText(DATA_META.downloaded), dateText(INSPECTIONS_META.feed)))} <button class="link" data-view="about">${esc(t('footerAbout'))}</button></p>`);
@@ -354,13 +391,13 @@ function renderStory(list) {
   const where = routeOn() ? t('storyRoute') : state.home && state.radius > 0 ? t('storyWithin', state.radius, lbl) : state.home ? t('storyCity') : t('storyCity');
   const centres = list.filter(p => p.kind === 'centre');
   const spaces = centres.reduce((n, p) => n + (age ? p.spaces[age] || 0 : p.capacity), 0);
-  const ok = list.filter(p => insp(p).kind === 'ok').length, train = centres.filter(p => trainOf(p)).length;
+  const ik = list.map(p => insp(p).kind), ok = ik.filter(k => k === 'ok').length, bad = ik.filter(k => k === 'bad').length, norep = ik.filter(k => k === 'none' || k === 'old').length, train = centres.filter(p => trainOf(p)).length;   // most of the rest have no recent report, not a failed one
   const med = state.home && !routeOn() && state.radius > 0 && !state.query ? cityMedian(age, state.radius) : null;   // compare only like with like: same circle, no name search
   const band = med ? [spaces < med * .7 ? 'bandLow' : spaces > med * 1.3 ? 'bandHigh' : 'bandMid', med] : null;
   const chips = [['french', 'french'], ['indigenous', 'indigenous'], ['okOnly', 'okOnly'], ['trainOnly', 'nearTrain']].filter(([k]) => state[k])
     .concat(!state.agencies ? [['agencies', 'homeAg', true]] : []).concat(state.query ? [['query', null]] : []);
   $('resultCount').innerHTML = `<p class="story"><b>${esc(t('storyN', list.length))}</b> ${age ? esc(t('storyFor', ageWord)) + ' ' : ''}${esc(where)}</p>
-    ${list.length ? `<div class="story-nums"><span><b>${fmt(spaces)}</b>${esc(t('stSpaces', ageWord))}${band ? ` <em class="band ${band[0]}" title="${esc(t('cmpCity', fmt(band[1])) + '. ' + t('cityNote'))}">${esc(t(band[0]))}</em>` : ''}</span><span><b>${fmt(ok)}</b>${esc(t('stOk'))}</span><span><b>${fmt(train)}</b>${esc(t('stTrain'))}</span></div>` : ''}
+    ${list.length ? `<div class="story-nums"><span><b>${fmt(spaces)}</b>${esc(t('stSpaces', ageWord))}${band ? ` <em class="band ${band[0]}" title="${esc(t('cmpCity', fmt(band[1])) + '. ' + t('cityNote'))}">${esc(t(band[0]))}</em>` : ''}</span><span class="story-insp"><span><b>${fmt(ok)}</b>${esc(t('stOk'))}</span>${bad ? `<span class="bad"><b>${fmt(bad)}</b>${esc(t('stBad'))}</span>` : ''}${norep ? `<span><b>${fmt(norep)}</b>${esc(t('stNoRep'))}</span>` : ''}</span><span><b>${fmt(train)}</b>${esc(t('stTrain'))}</span></div>` : ''}
     ${age && list.length && !spaces ? `<p class="story-none">${ic('alert', 'sm')}${esc(t('stNone', ageWord))}</p>` : ''}
     ${chips.length ? `<div class="fchips">${chips.length > 1 ? `<button class="fchip clear" data-unf="all">${esc(t('clearAll'))}</button>` : ''}${chips.map(([k, l, neg]) => `<button class="fchip" data-unf="${k}" aria-label="${esc(t('chipClear'))}: ${esc(l ? t(l) : state.query)}">${neg ? '− ' : ''}${esc(l ? t(l) : '“' + state.query + '”')}${ic('x', 'sm')}</button>`).join('')}</div>` : ''}`;
 }
@@ -381,7 +418,8 @@ function hoverOn(id) {
 $('results').addEventListener('mouseover', e => { const c = e.target.closest('.pc'); hoverOn(c ? c.dataset.id : null); });
 $('results').addEventListener('mouseleave', () => hoverOn(null));
 function renderTip(list) {
-  let html = '';
+  let html = '';   // a hint where it is needed, until the first save (it replaced the tour)
+  if (!state.shortlist.length && !state.hints.save) html += `<div class="tip info save-hint">${ic('heart', 'sm')}<span><b>${esc(t('saveHintT'))}</b> ${esc(t('saveHint'))}</span></div>`;
   const si = startInfo();
   if (si && state.age === si.group) html += `<div class="tip info">${ic('calendar', 'sm')}<span>${esc(t('ageAtStart', tr(AGE[si.group].label).toLowerCase(), dateText(si.when)))}</span></div>`;
   if (list.length < MIN_PICKS) {   // few results: show every way out, each with how many programs it would give
@@ -401,6 +439,7 @@ $('tipBox').addEventListener('click', e => {
 });
 function countWith(patch) { const keep = {}; Object.keys(patch).forEach(k => { keep[k] = state[k]; state[k] = patch[k]; }); const n = PROVIDERS.filter(matches).length; Object.assign(state, keep); return n; }
 $('results').addEventListener('click', e => {
+  if (e.target.closest('[data-more]')) { listMax += 60; renderList(); return; }
   const s = e.target.closest('[data-save]'); if (s) { e.stopPropagation(); toggleShortlist(s.dataset.save); return; }
   const c = e.target.closest('.pc'); if (c) openPanel(c.dataset.id);
 });
@@ -448,7 +487,7 @@ function openPanel(id, sec) {
     <div class="p-head">
       <button class="p-close" id="pClose" aria-label="Close">${ic('x')}</button>
       <h2 id="pTitle">${esc(p.name)}</h2>
-      <div class="p-sub">${esc(p.address)}, ${esc(p.city)} ${esc(p.postal)}${distText(p) ? ' · <b>' + esc(distText(p)) + '</b>' : ''}${p.approx ? ' · ' + esc(t('approx')) : ''}</div>
+      <div class="p-sub">${esc(addr(p))}, ${esc(p.city)} ${esc(p.postal)}${distText(p) ? ' · <b>' + esc(distText(p)) + '</b>' : ''}${p.approx ? ' · ' + esc(t('approx')) : ''}</div>
     </div>
     <div class="p-body" id="pBody">
       <button class="btn big wide p-save${on ? ' on' : ''}" data-save="${id}" aria-pressed="${on}">${ic(on ? 'check' : 'heart')}<span>${esc(on ? t('pSaved') : t('pSave'))}</span>${on ? `<small>${esc(t('pSavedS', state.shortlist.length))}</small>` : ''}</button>
@@ -589,9 +628,9 @@ async function loadGoogle(p) {
 function toggleShortlist(id, quiet) {
   const i = state.shortlist.indexOf(id);
   if (i >= 0) { state.shortlist.splice(i, 1); if (!quiet) toast(t('toastRemoved')); }
-  else { if (state.shortlist.length >= MAX_PICKS) { toast(t('toastFull')); return; } state.shortlist.push(id); if (!quiet) toast(t('toastSaved', state.shortlist.length)); }
+  else { if (state.shortlist.length >= MAX_PICKS) { toast(t('toastFull')); return; } state.shortlist.push(id); state.hints.save = true; if (!quiet) toast(t('toastSaved', state.shortlist.length)); }
   save(); renderStepper();
-  if (current === 'find') renderList();
+  if (current === 'find') { const y = $('results').scrollTop; renderList(); $('results').scrollTop = y; }
   renderDock();
   if (current === 'shortlist') renderShortlist();
 }
@@ -610,7 +649,7 @@ function renderShortlist() {
     const p = BY_ID[id], s = score(id), open = !!state.notes[id];
     return `<article class="si glass" draggable="true" data-id="${id}">
       <div class="rank" aria-label="Rank ${i + 1}">${i + 1}</div>
-      <div><h3>${esc(p.name)}</h3><div class="meta">${esc(p.address)}${distText(p) ? ' · ' + esc(distText(p)) : ''}</div>
+      <div><h3>${esc(p.name)}</h3><div class="meta">${esc(addr(p))}${distText(p) ? ' · ' + esc(distText(p)) : ''}</div>
         <div class="si-row">${inspBadge(p, true)}${state.visited[id] ? `<span class="badge ok">${ic('check', 'sm')}${esc(t('visited'))}</span>` : ''}
           ${s.g + s.u + s.c ? `<span class="muted" style="font-size:13.5px">${esc(t('score', s.g, s.u, s.c))}</span>` : ''}
           <button class="link" data-open="${id}">${esc(t('details'))}</button><button class="link" data-cl="${id}">${esc(t('step3'))}</button></div>
@@ -655,7 +694,7 @@ $('view-shortlist').addEventListener('click', async e => {
   const cl = e.target.closest('[data-cl]'); if (cl) { state.clFor = cl.dataset.cl; save(); go('visit'); return; }
   const op = e.target.closest('[data-open]'); if (op) { openPanel(op.dataset.open, 'overview'); return; }
   if (e.target.closest('#shareBtn')) { const url = `${location.origin}${location.pathname}?list=${state.shortlist.join(',')}&lang=${state.lang}#shortlist`; toast((await copyText(url)) ? t('shared') : url); return; }
-  if (e.target.closest('#copyReg')) { const txt = state.shortlist.map((x, i) => `${i + 1}. ${BY_ID[x].name} (${BY_ID[x].address}, ${BY_ID[x].city})`).join('\n'); toast((await copyText(txt)) ? t('copied') : txt); return; }
+  if (e.target.closest('#copyReg')) { const txt = state.shortlist.map((x, i) => `${i + 1}. ${BY_ID[x].name} (${addr(BY_ID[x])}, ${BY_ID[x].city})`).join('\n'); toast((await copyText(txt)) ? t('copied') : txt); return; }
   if (e.target.closest('#printBtn')) { window.print(); return; }
   if (e.target.closest('#addShared')) { sharedIds.forEach(x => { if (!state.shortlist.includes(x) && state.shortlist.length < MAX_PICKS) state.shortlist.push(x); }); sharedOpen = false; save(); renderShortlist(); renderStepper(); return; }
   if (e.target.closest('#dismissShared')) { sharedOpen = false; renderShortlist(); }
@@ -690,8 +729,7 @@ function renderVisit() {
     ${notes[k] || noteOpen.has(k) ? `<input type="text" placeholder="${esc(t('note'))}…" value="${esc(notes[k] || '')}" aria-label="${esc(t('note'))}">` : `<button type="button" class="link add-note" data-addnote="${k}">+ ${esc(t('addNote'))}</button>`}</div>`;
   const toggle = `<p class="more-q"><button class="btn ghost small" data-mode="${top ? 'all' : 'top'}">${esc(top ? t('vShowAll') : t('vShowTop'))}</button></p>`;
   if (top) {
-    const c = visitCount();
-    $('clGroups').innerHTML = `<button class="vm-start glass" id="vmGo">${ic('play')}<span><b>${esc(t('vmStart'))}</b><small>${esc(t('vmStartS'))}</small></span>${ic('arrow', 'sm')}</button><section class="group glass qcard"><div class="qcard-head"><div><h2>${esc(t('vTopTitle'))}</h2><p class="muted">${esc(t('vTopLead'))}</p></div><span class="gcount">${esc(t('vProgress', c.a, c.n))}</span></div>
+    $('clGroups').innerHTML = `<button class="vm-start glass" id="vmGo">${ic('play')}<span><b>${esc(t('vmStart'))}</b><small>${esc(t('vmStartS'))}</small></span>${ic('arrow', 'sm')}</button><section class="group glass qcard"><div class="qcard-head"><div><h2>${esc(t('vTopTitle'))}</h2><p class="muted">${esc(t('vTopLead'))}</p></div></div>
       ${shownQs().map(([, q, k], i) => qRow(q, k, i + 1)).join('')}</section>` + toggle;
   } else {
     $('clGroups').innerHTML = CHECKLIST.map((g, gi) => `<details class="group glass"${gi === 0 ? ' open' : ''}><summary>${esc(tr(g.title))}<span class="gcount">${g.items.filter((_, i) => ans[g.id + i]).length} / ${g.items.length}</span></summary>
@@ -879,7 +917,7 @@ function printPlan() {
   $('planPrint').innerHTML = `<h1>${esc(t('planTitle'))}</h1><p class="muted">${esc(t('planMade', dateText(ymd(new Date()))))}</p>
     ${si ? `<p><b>${esc(t('ageAtStart', tr(AGE[si.group].label).toLowerCase(), dateText(si.when)))}</b></p>` : ''}
     <h2>${esc(t('planChoices'))}</h2>${state.shortlist.length ? `<ol>${state.shortlist.map(id => { const p = BY_ID[id], sc = score(id), r = INSPECTIONS[id];
-      return `<li><b>${esc(p.name)}</b>, ${esc(p.address)}, ${esc(p.city)} ${esc(p.postal)}${state.home ? ' · ' + esc(kmText(km(state.home, p))) : ''}<br>
+      return `<li><b>${esc(p.name)}</b>, ${esc(addr(p))}, ${esc(p.city)} ${esc(p.postal)}${state.home ? ' · ' + esc(kmText(km(state.home, p))) : ''}<br>
         ${wOf(id).s !== 'none' ? `${esc(t(wKey(wOf(id).s)))}${wOf(id).a ? ' (' + esc(dateText(wOf(id).a)) + ')' : ''} · ` : ''}${r ? `${esc(t('inspLast'))}: ${esc(dateText(r.last))} (${esc(r.ok ? t('inspOk') : t('inspBad'))}) · ` : ''}${sc.g + sc.u + sc.c ? esc(t('score', sc.g, sc.u, sc.c)) + ' · ' : ''}${state.visited[id] ? esc(t('visited')) : ''}
         ${state.notes[id] ? `<br><i>${esc(state.notes[id])}</i>` : ''}</li>`; }).join('')}</ol>` : `<p>${esc(t('planNone'))}</p>`}
     <h2>${esc(t('planNext'))}</h2>${APHASES.map(ph => `<h3>${esc(t(ph.label))}</h3><ol>${ph.items.map(k => `<li>${state.ap[k] ? '[x] ' : '[ ] '}${esc(t(k))}</li>`).join('')}</ol>`).join('')}
@@ -909,7 +947,7 @@ $('view-apply').addEventListener('click', async e => {
   const cn = e.target.closest('[data-copyname]'); if (cn) { toast((await copyText(BY_ID[cn.dataset.copyname].name)) ? t('copied') : BY_ID[cn.dataset.copyname].name); return; }
   const ch = e.target.closest('[data-est] [data-v]');
   if (ch) { const k = ch.closest('[data-est]').dataset.est; state[k] = k === 'estDays' ? +ch.dataset.v : ch.dataset.v; save(); if (k === 'estDays') renderApply(); else renderEstimator(); return; }
-  if (e.target.closest('#copyReg2')) { const txt = state.shortlist.map((x, i) => `${i + 1}. ${BY_ID[x].name} (${BY_ID[x].address}, ${BY_ID[x].city})`).join('\n'); toast((await copyText(txt)) ? t('copied') : txt); return; }
+  if (e.target.closest('#copyReg2')) { const txt = state.shortlist.map((x, i) => `${i + 1}. ${BY_ID[x].name} (${addr(BY_ID[x])}, ${BY_ID[x].city})`).join('\n'); toast((await copyText(txt)) ? t('copied') : txt); return; }
   if (e.target.closest('#icsBtn')) {
     const d = new Date(); d.setMonth(d.getMonth() + 2);   // every 2 months: our suggestion, not a City rule
     downloadIcs('child-care-registry-reminders.ics', [{ date: d, rrule: 'RRULE:FREQ=MONTHLY;INTERVAL=2;COUNT=12', title: state.lang === 'fr' ? 'Mettre à jour ma demande au registre des services de garde' : 'Update my City child care registry application', desc: `${t('task3d')} ${SOURCES.registryApp.url}` }]);
@@ -1052,21 +1090,19 @@ document.addEventListener('click', e => {
   document.body.appendChild(a); a.click(); a.remove();
 });
 
-/* ---------- 11. Kip helper and tour ---------- */
+/* ---------- 11. Help (one button, in the top bar) and the tour ---------- */
 function showKip() {
   const k = { home: 'kipHome', find: 'kipFind', shortlist: 'kipShortlist', visit: 'kipVisit', apply: 'kipApply', services: 'kipServices', about: 'kipHome', insights: 'kipHome' }[current];
-  $('kipBubble').innerHTML = `<b>${ic('help', 'sm')}${esc(t('help'))}</b>${esc(t(k))}<div style="margin-top:10px;display:flex;gap:8px"><button class="btn ghost small" data-view="services">${esc(t('faqTitle'))}</button><button class="btn ghost small" id="kipTour">${esc(t('footerTour'))}</button></div>`;
-  $('kipBubble').hidden = false; $('kipFab').setAttribute('aria-expanded', 'true');
+  $('kipBubble').innerHTML = `<b>${ic('help', 'sm')}${esc(t('help'))}</b>${esc(t(k))}<div style="margin-top:10px;display:flex;gap:8px"><button class="btn ghost small" id="kipTour">${ic('play', 'sm')}${esc(t('tourStart'))}</button><button class="btn ghost small" data-view="services">${esc(t('faqTitle'))}</button></div>`;
+  $('kipBubble').hidden = false; $('helpTop').setAttribute('aria-expanded', 'true');
 }
-function hideKip() { $('kipBubble').hidden = true; $('kipFab').setAttribute('aria-expanded', 'false'); }
-$('kipFab').addEventListener('click', () => $('kipBubble').hidden ? showKip() : hideKip());
+function hideKip() { $('kipBubble').hidden = true; $('helpTop').setAttribute('aria-expanded', 'false'); }
 $('helpTop').addEventListener('click', () => $('kipBubble').hidden ? showKip() : hideKip());
 document.addEventListener('click', e => {
-  if (e.target.closest('[data-kip]')) { showKip(); return; }
   if (e.target.closest('#kipTour')) { hideKip(); showTour(0); return; }
-  if (!e.target.closest('#kipBubble, #kipFab, #helpTop')) hideKip();
+  if (!e.target.closest('#kipBubble, #helpTop')) hideKip();
 });
-// First-visit tour: a spotlight on the real controls, one at a time (works with keyboard: Enter, arrows, Escape)
+// Tour, only when asked for: a spotlight on the real controls, one at a time (keyboard: Enter, arrows, Escape)
 let tourStep = 0;
 const visible = el => !!el && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden';
 function tourTarget(s) { return (s.target || []).map(q => document.querySelector(q)).find(visible) || null; }
@@ -1090,10 +1126,9 @@ function showTour(i) {
   $('tourDots').innerHTML = TOUR.map((_, j) => `<i class="${j === i ? 'on' : ''}"></i>`).join('');
   $('tourNext').textContent = i === TOUR.length - 1 ? t('tourGo') : t('tourNext');
   $('tourSkip').textContent = i ? t('tourBack') : t('tourSkip');
-  $('tourKip').toggleAttribute('hidden', i > 0);   // an SVG has no .hidden property
   $('tour').hidden = false;
   const el = tourTarget(s);
-  if (el) { const r = el.getBoundingClientRect(); if (r.top < 80 || r.bottom > innerHeight - 40) el.scrollIntoView({ block: 'center' }); }
+  if (el) { const r = el.getBoundingClientRect(); if (r.top < 80 || r.bottom > innerHeight - 40) el.scrollIntoView({ block: 'center', behavior: 'instant' }); }   // instant: a smooth scroll left the spotlight on the wrong control
   requestAnimationFrame(() => { placeTour(); $('tourNext').focus(); });
 }
 function endTour() { $('tour').hidden = true; state.tourDone = true; save(); go('home', { scroll: false }); const c = document.querySelector('#ageChips .chip'); if (c) c.focus(); }
@@ -1134,6 +1169,5 @@ const startHash = (location.hash || '').slice(1), deepId = startHash.startsWith(
 const startView = deepId ? 'find' : startHash || (sharedIds.length ? 'shortlist' : 'home');
 go(startView, { scroll: false });
 if (deepId) { activeId = deepId; renderList(); openPanel(deepId); }
-if (!state.tourDone && !sharedIds.length && !deepId && !params.has('notour')) setTimeout(() => showTour(0), 600);
 
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});

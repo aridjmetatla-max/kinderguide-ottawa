@@ -15,11 +15,11 @@
 <meta property="og:url" content="https://aridjmetatla-max.github.io/kinderguide-ottawa/">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://tile.openstreetmap.org" crossorigin>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cellipse cx='32' cy='36' rx='26' ry='24' fill='%23f6c453'/%3E%3Ccircle cx='23' cy='32' r='4' fill='%232b2b2b'/%3E%3Ccircle cx='41' cy='32' r='4' fill='%232b2b2b'/%3E%3Cpath d='M24 44 Q32 50 40 44' stroke='%232b2b2b' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='11' fill='%230b5c66'/%3E%3Cpath d='M9 19.5 20 10l11 9.5' fill='none' stroke='%23fff' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M12.5 17.5V30h15V17.5' fill='none' stroke='%23fff' stroke-width='2.6' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<link rel="stylesheet" href="styles.css?v=46">
+<link rel="stylesheet" href="styles.css?v=47">
 </head>
 <body>
 <a class="skip" href="#main" data-i18n="skip">Skip to content</a>
@@ -33,7 +33,7 @@
   <nav class="stepper" aria-label="Steps" id="stepper"></nav>
   <div class="top-actions">
     <button class="pill" data-view="services" id="svcBtn"><span class="ico-slot" data-ic="grid"></span><span data-i18n="services">All services</span></button>
-    <button class="pill help-top" id="helpTop" aria-label="Help"><span class="ico-slot" data-ic="help"></span></button>
+    <button class="pill help-top" id="helpTop" aria-expanded="false" aria-controls="kipBubble"><span class="ico-slot" data-ic="help"></span><span class="help-lbl" data-i18n="help">Help</span></button>
     <button class="pill lang" id="langBtn" lang="fr"><span class="ico-slot" data-ic="globe"></span><span id="langLbl">Français</span><span class="lang-short" id="langShort">FR</span></button>
   </div>
 </header>
@@ -75,6 +75,7 @@
   <section class="view" id="view-find" aria-labelledby="findTitle">
     <div class="find-bar glass">
       <h1 class="sr" id="findTitle" data-i18n="step1">Find</h1>
+      <button type="button" class="fsum" id="fSum" aria-expanded="false"></button>
       <label class="sel"><span class="sr" data-i18n="myChild"></span><select id="fAge"></select></label>
       <div class="loc" id="locBox"></div>
       <div class="seg" id="fRadius" role="group" aria-label="Distance"></div>
@@ -85,7 +86,7 @@
     <div class="seg mswitch" id="mSwitch" role="group" aria-label="List or map"></div>
     <div class="find">
       <div class="list-col">
-        <div class="list-head"><span id="resultCount" aria-live="polite"></span><button class="link" id="kipFind" data-kip="find"><span data-i18n="help">Help</span></button></div>
+        <div class="list-head"><span id="resultCount" aria-live="polite"></span></div>
         <div id="tipBox"></div>
         <div class="list" id="results"></div>
       </div>
@@ -167,23 +168,14 @@
 <div class="scrim" id="scrim" hidden></div>
 <aside class="panel glass" id="panel" aria-hidden="true" role="dialog" aria-labelledby="pTitle"></aside>
 
-<!-- Kip helper -->
-<button class="kip-fab" id="kipFab" aria-label="Help" aria-expanded="false"><span class="ico-slot" data-ic="help"></span><span data-i18n="help">Help</span></button>
+<!-- Help (opened from the top bar) -->
 <div class="kip-bubble glass" id="kipBubble" hidden role="status"></div>
 
-<!-- Tour: a spotlight on the real controls, shown on the first visit -->
+<!-- Tour: opt-in from Help (or the footer), a spotlight on the real controls -->
 <div class="tour centred" id="tour" hidden>
   <div class="tour-spot" id="tourSpot" aria-hidden="true"></div>
   <div class="tour-card glass" id="tourCard" role="dialog" aria-modal="true" aria-labelledby="tourTitle" aria-describedby="tourText">
     <button class="p-close tour-x" id="tourClose" aria-label="Close the tour"><span class="ico-slot" data-ic="x"></span></button>
-    <svg class="kip" id="tourKip" viewBox="0 0 120 120" aria-hidden="true">
-      <ellipse cx="60" cy="70" rx="44" ry="40" fill="#f6c453"/>
-      <circle cx="44" cy="62" r="7" fill="#2b2b2b"/><circle cx="76" cy="62" r="7" fill="#2b2b2b"/>
-      <circle cx="46" cy="60" r="2.2" fill="#fff"/><circle cx="78" cy="60" r="2.2" fill="#fff"/>
-      <path d="M48 82 Q60 92 72 82" stroke="#2b2b2b" stroke-width="4" fill="none" stroke-linecap="round"/>
-      <circle cx="36" cy="78" r="6" fill="#f08a6b" opacity=".6"/><circle cx="84" cy="78" r="6" fill="#f08a6b" opacity=".6"/>
-      <path d="M60 30 Q62 14 74 12" stroke="#2b2b2b" stroke-width="4" fill="none" stroke-linecap="round"/><circle cx="76" cy="11" r="6" fill="#e07a5f"/>
-    </svg>
     <p class="tour-count" id="tourCount"></p>
     <h2 id="tourTitle"></h2>
     <p id="tourText"></p>
@@ -199,12 +191,12 @@
 <section id="planPrint" aria-hidden="true"></section>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script src="config.js?v=46"></script>
-<script src="icons.js?v=46"></script>
-<script src="data/providers.js?v=46"></script>
-<script src="data/inspections.js?v=46"></script>
-<script src="data/transit.js?v=46"></script>
-<script src="content.js?v=46"></script>
-<script src="app.js?v=46"></script>
+<script src="config.js?v=47"></script>
+<script src="icons.js?v=47"></script>
+<script src="data/providers.js?v=47"></script>
+<script src="data/inspections.js?v=47"></script>
+<script src="data/transit.js?v=47"></script>
+<script src="content.js?v=47"></script>
+<script src="app.js?v=47"></script>
 </body>
 </html>
