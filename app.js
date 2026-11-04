@@ -94,7 +94,7 @@ function inspBadge(p, short) {
 }
 
 // Addresses as people write them. The City's file puts some French street types after the name ("349 Olmstead Rue")
-// and has a few incomplete ones; ADDR_FIX entries were checked against OpenStreetMap (Nov 3). Only the display changes.
+// and has a few incomplete ones; ADDR_FIX entries were checked against OpenStreetMap (Nov 2). Only the display changes.
 const ADDR_FIX = { c2: 'Confederation Building, 229 Wellington Street', c145: 'Statistics Canada Main Building, 150 Tunney’s Pasture Driveway', c44: '116-4100 Strandherd Drive',
   c25: '1349 Randall Avenue', c27: '2605 Alta Vista Drive', c28: '557 Queen Mary Street', c30: '700 Montréal Road', c31: '258 Lisgar Street', c143: '100 Thomas More Private',
   c113: '5473 Abbott Street East', c196: '5473 Abbott Street East', c199: '2450 River Mist Road', c270: '88 Main Street', c279: '6025 Longleaf Drive', c273: '2540 Kaladar Avenue' };
@@ -284,6 +284,7 @@ function renderFindControls() {
 }
 document.querySelector('.find-bar').addEventListener('change', async e => {
   const el = e.target;
+  if (el.id === 'locInput') return;   // leaving the postal code box is not a filter change: redrawing here wiped the box before OK was clicked
   if (el.id === 'fAge') { state.age = el.value; }
   else if (el.id === 'fArea') {
     if (el.value === 'postal') { editing = 'home'; renderFindControls(); $('locInput').focus(); return; }
@@ -302,8 +303,11 @@ document.querySelector('.find-bar').addEventListener('click', async e => {
   if (e.target.closest('#clearWork')) { state.work = null; state.route = false; save(); renderFind(); }
 });
 async function submitLoc() {
-  const c = await lookupPostal($('locInput').value, null);
-  if (!c) { toast(t('badPostal')); return; }
+  const inp = $('locInput'), ok = $('locOk');
+  ok.classList.add('busy');   // the lookup can take a second
+  const c = await lookupPostal(inp.value, null);
+  ok.classList.remove('busy');
+  if (!c) { toast(t(/^[A-Z]\d[A-Z]\s*\d[A-Z]\d$/i.test(inp.value.trim()) ? 'notFound' : 'badPostal')); return; }
   if (editing === 'work') { state.work = c; state.route = !!state.home; } else state.home = c;
   editing = null; save(); renderFind();
 }
