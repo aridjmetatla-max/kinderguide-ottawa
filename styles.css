@@ -842,3 +842,5 @@ body.vm-on { overflow: hidden; }
 .tour-dots i { width: 8px; height: 8px; border-radius: 99px; background: rgba(15, 107, 107, .2); }
 .tour-dots i.on { width: 22px; background: var(--accent); }
 .tour-actions { display: flex; justify-content: space-between; }
+.sl-home { display: inline-flex; align-items: center; gap: 4px; color: var(--muted, #5a6475); font-size: 14px; }
+.sl-home b { color: inherit; }

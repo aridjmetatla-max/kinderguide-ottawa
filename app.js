@@ -14,7 +14,10 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const BY_ID = Object.fromEntries(PROVIDERS.map(p => [p.id, p]));
 const CENTRES = PROVIDERS.filter(p => p.kind === 'centre');
 const AGE = Object.fromEntries(AGES.map(a => [a.key, a]));
-const MAX_PICKS = 9, MIN_PICKS = 5, STALE_DAYS = 90;
+const MAX_PICKS = 9, MAX_HOME = 5, MIN_PICKS = 5, STALE_DAYS = 90;   // the City's registry: up to 9 centre or school programs, plus 5 home child care
+const isHomeId = id => !!BY_ID[id] && BY_ID[id].kind === 'home';
+function picks(list = state.shortlist) { const h = list.filter(isHomeId).length; return { c: list.length - h, h }; }
+const roomFor = (id, list = state.shortlist) => isHomeId(id) ? picks(list).h < MAX_HOME : picks(list).c < MAX_PICKS;
 const STEPS = ['find', 'shortlist', 'visit', 'apply'];
 
 function km(a, b) {
@@ -161,7 +164,7 @@ function renderDock() {
   const info = (icon, b, small) => `<div class="dock-info"><span class="dock-ic">${icon}</span><span><b>${esc(b)}</b>${small ? `<small>${esc(small)}</small>` : ''}</span></div>`;
   const btn = (view, label, cls = 'primary', back) => `<button class="btn ${cls}" data-view="${view}">${back ? ic('back', 'sm') : ''}${esc(label)}${back ? '' : ic('arrow', 'sm')}</button>`;
   let html = '';   // computers only (phones use the bottom bar); nothing when there is no next step yet
-  if (current === 'find' && n) html = info(ic('heart'), t('dockSaved', n), t('dockSavedS', n)) + btn('shortlist', t('dockToShortlist', n));
+  if (current === 'find' && n) html = info(ic('heart'), t('dockSaved', n), t('dockSavedS', picks())) + btn('shortlist', t('dockToShortlist', n));
   else if (current === 'shortlist' && n) html = info(ic('clipboard'), t('dockSlS'), '') + `<div class="dock-btns">${btn('find', t('dockMore'), 'ghost', true)}${btn('visit', t('dockToVisit'))}</div>`;
   else if (current === 'visit') { html = info(ic('file'), t('dockApply'), t('dockApplyS')) + `<div class="dock-btns">${btn('shortlist', t('step2'), 'ghost', true)}${btn('apply', t('dockToApply'))}</div>`; }
   d.innerHTML = html; d.hidden = !html; document.body.classList.toggle('has-dock', !!html);
@@ -410,12 +413,13 @@ $('resultCount').addEventListener('click', e => {
   const k = b.dataset.unf; if (k === 'all') Object.assign(state, { query: '', agencies: true, french: false, indigenous: false, okOnly: false, trainOnly: false }); else if (k === 'query') state.query = ''; else if (k === 'agencies') state.agencies = true; else state[k] = false;
   save(); renderFind();
 });
-// List and map point at each other: hovering a card grows its dot, hovering a dot outlines its card
+// List and map point at each other: hovering a card grows its dot, hovering a dot outlines its card.
+// A hovered dot is not brought to the front: moving it in the page between mouse-down and mouse-up made the browser drop the first click.
 let hoverId = null;
-function hoverOn(id) {
+function hoverOn(id, fromMap) {
   if (hoverId === id) return;
   const prev = hoverId; hoverId = id;
-  [prev, id].forEach(x => { if (x && markers[x]) { markers[x].setStyle(markerStyle(BY_ID[x])); if (x === id) markers[x].bringToFront(); } });
+  [prev, id].forEach(x => { if (x && markers[x]) { markers[x].setStyle(markerStyle(BY_ID[x])); if (x === id && !fromMap) markers[x].bringToFront(); } });
   document.querySelectorAll('.pc.hover').forEach(c => c.classList.remove('hover'));
   if (id) { const c = document.querySelector(`.pc[data-id="${id}"]`); if (c) c.classList.add('hover'); }
 }
@@ -457,7 +461,7 @@ function initMap() {
   map = window.L.map('map', { zoomControl: true }).setView([45.38, -75.72], 11);
   window.L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' }).addTo(map);
   markerLayer = window.L.layerGroup().addTo(map);
-  PROVIDERS.forEach(p => { markers[p.id] = window.L.circleMarker([p.lat, p.lon], markerStyle(p)).bindTooltip(esc(p.name), { direction: 'top', offset: [0, -6] }).on('click', () => openPanel(p.id)).on('mouseover', () => hoverOn(p.id)).on('mouseout', () => hoverOn(null)); });
+  PROVIDERS.forEach(p => { markers[p.id] = window.L.circleMarker([p.lat, p.lon], markerStyle(p)).bindTooltip(esc(p.name), { direction: 'top', offset: [0, -6] }).on('click', () => openPanel(p.id)).on('mouseover', () => hoverOn(p.id, true)).on('mouseout', () => hoverOn(null)); });
 }
 const pinIcon = name => window.L.divIcon({ className: 'map-pin', html: `<span>${ic(name)}</span>`, iconSize: [34, 34], iconAnchor: [17, 34] });
 function renderMap(list) {
@@ -494,7 +498,7 @@ function openPanel(id, sec) {
       <div class="p-sub">${esc(addr(p))}, ${esc(p.city)} ${esc(p.postal)}${distText(p) ? ' · <b>' + esc(distText(p)) + '</b>' : ''}${p.approx ? ' · ' + esc(t('approx')) : ''}</div>
     </div>
     <div class="p-body" id="pBody">
-      <button class="btn big wide p-save${on ? ' on' : ''}" data-save="${id}" aria-pressed="${on}">${ic(on ? 'check' : 'heart')}<span>${esc(on ? t('pSaved') : t('pSave'))}</span>${on ? `<small>${esc(t('pSavedS', state.shortlist.length))}</small>` : ''}</button>
+      <button class="btn big wide p-save${on ? ' on' : ''}" data-save="${id}" aria-pressed="${on}">${ic(on ? 'check' : 'heart')}<span>${esc(on ? t('pSaved') : t('pSave'))}</span>${on ? `<small>${esc(t('pSavedS', isHomeId(id) ? picks().h : picks().c, isHomeId(id)))}</small>` : ''}</button>
       <div class="p-actions">${ext(`https://www.google.com/maps/dir/?api=1&travelmode=transit&destination=${q}`, t('directions'))}${ext(`https://www.google.com/search?q=${encodeURIComponent(p.name + ' Ottawa')}`, t('contact'))}<button class="btn ghost small" id="copyLink" aria-label="${esc(t('copyLink'))}" title="${esc(t('copyLink'))}">${ic('link', 'sm')}</button></div>
       ${glance(p)}
       <p class="p-limit">${ic('info', 'sm')}<span>${esc(t('pLimit'))}</span></p>
@@ -632,21 +636,21 @@ async function loadGoogle(p) {
 function toggleShortlist(id, quiet) {
   const i = state.shortlist.indexOf(id);
   if (i >= 0) { state.shortlist.splice(i, 1); if (!quiet) toast(t('toastRemoved')); }
-  else { if (state.shortlist.length >= MAX_PICKS) { toast(t('toastFull')); return; } state.shortlist.push(id); state.hints.save = true; if (!quiet) toast(t('toastSaved', state.shortlist.length)); }
+  else { const home = isHomeId(id); if (!roomFor(id)) { toast(t(home ? 'toastFullHome' : 'toastFull')); return; } state.shortlist.push(id); state.hints.save = true; if (!quiet) toast(t('toastSaved', home ? picks().h : picks().c, home)); }
   save(); renderStepper();
   if (current === 'find') { const y = $('results').scrollTop; renderList(); $('results').scrollTop = y; }
   renderDock();
   if (current === 'shortlist') renderShortlist();
 }
 function score(id) { const a = Object.values(state.answers[id] || {}); return { g: a.filter(x => x === 'good').length, u: a.filter(x => x === 'unsure').length, c: a.filter(x => x === 'concern').length }; }
-const sharedIds = (params.get('list') || '').split(',').filter(id => BY_ID[id]).slice(0, MAX_PICKS);
+const sharedIds = (params.get('list') || '').split(',').filter(id => BY_ID[id]).filter((id, i, a) => roomFor(id, a.slice(0, i)));
 let sharedOpen = sharedIds.length > 0;
 const slNoteOpen = new Set();
 function renderShortlist() {
-  const n = state.shortlist.length;
+  const n = state.shortlist.length, k = picks();
   $('slMode').innerHTML = [['list', t('list')], ['compare', t('compare')]].map(([k, l]) => `<button data-m="${k}" class="${state.slMode === k ? 'on' : ''}">${esc(l)}</button>`).join('');
   $('sharedBanner').innerHTML = sharedOpen ? `<div class="shared"><span>${ic('link', 'sm')} ${esc(t('sharedBanner', sharedIds.length))} ${sharedIds.map(id => esc(BY_ID[id].name)).join(' · ')}</span><span style="display:flex;gap:8px"><button class="btn primary small" id="addShared">${esc(t('addShared'))}</button><button class="btn ghost small" id="dismissShared">${esc(t('dismiss'))}</button></span></div>` : '';
-  $('slProgress').innerHTML = `<div class="slot-row" aria-hidden="true">${Array.from({ length: MAX_PICKS }, (_, i) => `<span class="slot${i < n ? ' full' : ''}${i === MIN_PICKS - 1 ? ' min' : ''}"></span>`).join('')}</div><b>${n} / 9</b><span class="muted">${esc(n === 0 ? '' : n < MIN_PICKS ? t('slNeed', MIN_PICKS - n) : t('slGood', MAX_PICKS - n))}</span>`;
+  $('slProgress').innerHTML = `<div class="slot-row" aria-hidden="true">${Array.from({ length: MAX_PICKS }, (_, i) => `<span class="slot${i < k.c ? ' full' : ''}${i === MIN_PICKS - 1 ? ' min' : ''}"></span>`).join('')}</div><b>${k.c} / ${MAX_PICKS}</b><span class="sl-home">${ic('home', 'sm')}<b>${k.h} / ${MAX_HOME}</b> ${esc(t('homeShort'))}</span><span class="muted">${esc(n === 0 ? '' : n < MIN_PICKS ? t('slNeed', MIN_PICKS - n) : t('slGood', MAX_PICKS - k.c))}</span>`;
   if (!n) { $('slBody').innerHTML = `<div class="empty glass teach">${ic('heart')}<h2>${esc(t('slEmptyT'))}</h2><p>${esc(t('slEmpty2'))}</p><button class="btn primary" data-view="find">${esc(t('goFind'))}${ic('arrow', 'sm')}</button></div>`; $('slActions').innerHTML = ''; return; }
   if (state.slMode === 'compare') renderCompare();
   else $('slBody').innerHTML = `<div class="sl" id="slList">${state.shortlist.map((id, i) => {
@@ -700,7 +704,7 @@ $('view-shortlist').addEventListener('click', async e => {
   if (e.target.closest('#shareBtn')) { const url = `${location.origin}${location.pathname}?list=${state.shortlist.join(',')}&lang=${state.lang}#shortlist`; toast((await copyText(url)) ? t('shared') : url); return; }
   if (e.target.closest('#copyReg')) { const txt = state.shortlist.map((x, i) => `${i + 1}. ${BY_ID[x].name} (${addr(BY_ID[x])}, ${BY_ID[x].city})`).join('\n'); toast((await copyText(txt)) ? t('copied') : txt); return; }
   if (e.target.closest('#printBtn')) { window.print(); return; }
-  if (e.target.closest('#addShared')) { sharedIds.forEach(x => { if (!state.shortlist.includes(x) && state.shortlist.length < MAX_PICKS) state.shortlist.push(x); }); sharedOpen = false; save(); renderShortlist(); renderStepper(); return; }
+  if (e.target.closest('#addShared')) { sharedIds.forEach(x => { if (!state.shortlist.includes(x) && roomFor(x)) state.shortlist.push(x); }); sharedOpen = false; save(); renderShortlist(); renderStepper(); return; }
   if (e.target.closest('#dismissShared')) { sharedOpen = false; renderShortlist(); }
 });
 $('view-shortlist').addEventListener('input', e => { const n = e.target.dataset.note; if (n) { state.notes[n] = e.target.value; save(); } });
