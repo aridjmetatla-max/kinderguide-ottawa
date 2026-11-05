@@ -473,10 +473,10 @@ function renderMap(list) {
   if (state.home) homeMarker = window.L.marker([state.home.lat, state.home.lon], { icon: pinIcon('home'), title: t('home') }).addTo(map);
   if (state.work) workMarker = window.L.marker([state.work.lat, state.work.lon], { icon: pinIcon('briefcase'), title: t('workL') }).addTo(map);
   if (routeOn()) {
-    routeLine = window.L.polyline([[state.home.lat, state.home.lon], [state.work.lat, state.work.lon]], { color: COLORS.saved, weight: 4, dashArray: '8 8' }).addTo(map);
+    routeLine = window.L.polyline([[state.home.lat, state.home.lon], [state.work.lat, state.work.lon]], { color: COLORS.saved, weight: 4, dashArray: '8 8', interactive: false }).addTo(map);
     map.fitBounds(routeLine.getBounds(), { padding: [40, 40] });
   } else if (state.home && state.radius > 0) {
-    radiusCircle = window.L.circle([state.home.lat, state.home.lon], { radius: state.radius * 1000, color: COLORS.centre, weight: 1, fillOpacity: .05 }).addTo(map);
+    radiusCircle = window.L.circle([state.home.lat, state.home.lon], { radius: state.radius * 1000, color: COLORS.centre, weight: 1, fillOpacity: .05, interactive: false }).addTo(map);   // drawn after the dots: if it took the mouse, no dot inside it could be clicked
     map.fitBounds(radiusCircle.getBounds(), { padding: [20, 20] });
   } else if (list.length) map.fitBounds(list.map(p => [p.lat, p.lon]), { padding: [30, 30], maxZoom: 14 });
 }
